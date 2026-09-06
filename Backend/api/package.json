@@ -6,7 +6,9 @@
     "dev": "next dev --webpack --port 5000",
     "build": "next build",
     "start": "next start --port 5000",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:emergency": "node tests/emergency-incidents.test.cjs",
+    "test:emergency:postgres": "node tests/emergency-incidents.postgres.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

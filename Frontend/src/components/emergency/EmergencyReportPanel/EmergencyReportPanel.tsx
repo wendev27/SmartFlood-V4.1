@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useEmergencyReports } from "./useEmergencyReports";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { Pagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
@@ -11,7 +12,7 @@ export type EmergencyReportStatus = "Pending" | "En Route" | "Arrived" | "Resolv
 type ActiveStatus = Exclude<EmergencyReportStatus, "Resolved">;
 type DataState = "unavailable" | "loading" | "error" | "ready";
 
-/** Presentation model only; this is not an existing V3.2 API or database contract. */
+/** Presentation model; API fields are mapped in emergencyIncidentPresentation.ts. */
 export interface EmergencyReportViewModel {
   id: string;
   residentName: string | null;
@@ -32,7 +33,7 @@ export interface EmergencyReportPresentationProps {
   onStatusFilterChange: (status: ActiveStatus) => void;
   query: string;
   onQueryChange: (query: string) => void;
-  /** Already scoped and paginated by a future authorized controller. Never seed this with prototype data. */
+  /** Already scoped and paginated by a authorized controller. Never seed this with prototype data. */
   reports?: readonly EmergencyReportViewModel[];
   statusCounts?: Readonly<Partial<Record<ActiveStatus, number>>>;
   pagination?: PaginationState | null;
@@ -51,21 +52,10 @@ export interface EmergencyReportPresentationProps {
   onDismissUpdate?: () => void;
 }
 
-/** V3.2 has no resident-report API. Only presentation navigation is connected here. */
+/** Connect the existing REY presentation through a typed API controller. */
 export function EmergencyReportPanel() {
-  const [view, setView] = useState<View>("main");
-  const [statusFilter, setStatusFilter] = useState<ActiveStatus>("Pending");
-  const [query, setQuery] = useState("");
-
-  return <EmergencyReportPresentation
-    view={view}
-    onViewChange={(next) => { setView(next); setQuery(""); setStatusFilter("Pending"); }}
-    state="unavailable"
-    statusFilter={statusFilter}
-    onStatusFilterChange={setStatusFilter}
-    query={query}
-    onQueryChange={setQuery}
-  />;
+  const props = useEmergencyReports();
+  return <EmergencyReportPresentation {...props} />;
 }
 
 /** REY composition, with controlled report data and persistence supplied from outside the view. */
@@ -101,7 +91,7 @@ export function EmergencyReportPresentation({
           {status}<small aria-label={statusCounts?.[status] === undefined ? `${status} count unavailable` : `${statusCounts[status]} ${status} reports`}>{canRead ? statusCounts?.[status] ?? "—" : "—"}</small>
         </button>)}
       </div> : null}
-      <div className={styles.searchBar}><label><SearchIcon /><input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} disabled={!canRead} placeholder="Search" aria-label="Search emergency reports" /></label></div>
+      <div className={styles.searchBar}><label><SearchIcon /><input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} disabled={state === "unavailable"} placeholder="Search" aria-label="Search emergency reports" /></label></div>
       <div className={styles.tableWrap}>
         <table><thead><tr><th scope="col">Name</th><th scope="col">Location</th><th scope="col">Phone Number</th><th scope="col">Status</th><th scope="col"><span className={styles.srOnly}>Actions</span></th></tr></thead>
           <tbody>{canRead ? reports.map((report) => <tr key={report.id}>
@@ -120,7 +110,7 @@ export function EmergencyReportPresentation({
         /> : null}
       </div>
       {canRead && onPageChange ? <Pagination pagination={pagination ?? null} onPageChange={onPageChange} label="Emergency reports" /> : null}
-      <Modal isOpen={canRead && Boolean(selectedReport)} onClose={() => onCloseReport?.()} labelledBy="emergency-report-detail-title" className={styles.dialog} backdropClassName={styles.overlay} size="xl">
+      <Modal isOpen={Boolean(selectedReport)} onClose={() => onCloseReport?.()} labelledBy="emergency-report-detail-title" className={styles.dialog} backdropClassName={styles.overlay} size="xl">
         {selectedReport ? <EmergencyReportDetails key={selectedReport.id} report={selectedReport} onClose={() => onCloseReport?.()} onAdvance={onAdvance} isUpdating={isUpdating} updateError={updateError} confirmedUpdate={confirmedUpdate} onDismissUpdate={onDismissUpdate} /> : null}
       </Modal>
     </section>

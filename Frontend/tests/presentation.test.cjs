@@ -119,9 +119,11 @@ test("approved and rejected applications keep their View action", () => {
   }
 });
 
-test("emergency prototype advertises unavailability without sample records or counts", () => {
+test("emergency landing presents real-data navigation without sample records or counts", () => {
   const html = render(EmergencyReportPanel);
-  assert.match(html, /Emergency reporting is unavailable/);
+  assert.match(html, /Emergency Report/);
+  assert.match(html, /Emergency History/);
+  assert.doesNotMatch(html, /Emergency reporting is unavailable/);
   assert.match(html, /Emergency History/);
   assert.doesNotMatch(html, /Sebastian|May 12|flood-house|Mark as|Showing \d/);
 });
@@ -266,4 +268,14 @@ test("weather errors expose retry without fabricated observations", () => {
   assert.match(html, /Observation time unavailable/);
   assert.doesNotMatch(html, /\d+°C/);
   client.clear();
+});
+
+const { incidentPresentation, incidentStatusForLabel } = require('@/adapters/emergencyIncidentPresentation');
+test('incident adapter maps Arrived without inventing resident confirmation', () => {
+  const row = { id: 'report-fixture', user_id: 'resident-fixture', barangay_id: 2, location: 'Fixture location', description: null, image_paths: ['resident/report/photo.jpg'], status: 'arrived', created_at: '2026-09-06T23:00:00Z', updated_at: '2026-09-06T23:00:00Z', resident_confirmed: null, feedback: null, resolved_at: null, resident: { resident_id: 'resident-fixture', name: 'Fixture Resident', phone: null } };
+  const view = incidentPresentation(row);
+  assert.equal(view.status, 'Arrived'); assert.equal(incidentStatusForLabel.Arrived, 'arrived');
+  assert.equal(view.residentConfirmation, null); assert.equal(view.phone, null);
+  assert.equal(view.photos[0].url, '/api/emergency-reports/report-fixture/photos/0');
+  assert.equal(incidentPresentation({ ...row, status: 'resolved' }).residentConfirmation, null);
 });
