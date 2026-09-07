@@ -128,6 +128,7 @@ export interface EmergencyWorkflowResponse {
   items?: Record<string, unknown>[];
   data?: Record<string, unknown>[];
   duplicate?: boolean;
+  qr_token?: string;
 }
 
 export interface EmergencyAllocationItem {

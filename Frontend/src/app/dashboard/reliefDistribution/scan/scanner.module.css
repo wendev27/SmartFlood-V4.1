@@ -292,3 +292,52 @@
 .header,.campaignBar,.manualCard,.resultCard { border: 1px solid rgba(255,255,255,.7); border-radius: 16px; box-shadow: 0 6px 18px rgba(37,99,235,.12); }
 .header { background: rgba(255,255,255,.65); backdrop-filter: blur(11px); }
 .header h1,.manualCard h2,.resultCard h2 { color: #1e1e1e; font-weight: 600; }
+
+.qrCard {
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 16px;
+  box-shadow: 0 6px 18px rgba(37,99,235,.12);
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px 22px;
+}
+
+.qrCard header span {
+  color: #0f61ff;
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+
+.qrCard h2 {
+  color: #14385f;
+  font-size: clamp(22px, 2.5vw, 29px);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.qrCard p {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.qrFrame {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cfe2ff;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 340px;
+  padding: 28px;
+}
+
+.qrFrame :global(svg) {
+  height: auto;
+  max-width: 100%;
+}

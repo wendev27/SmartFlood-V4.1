@@ -1,6 +1,6 @@
 import { assignedBarangayForUser } from "@/lib/barangayScope";
 import { dashboardViewerRole, type DashboardViewer } from "@/lib/dashboardViewer";
-import { getCampaign, reconcileCampaignDistributionReadiness, refreshCampaignExpiration } from "@/lib/emergencyCampaigns";
+import { getCampaign, reconcileCampaignDistributionReadiness, refreshCampaignExpiration, resolveCampaignBatchIdByQrToken } from "@/lib/emergencyCampaigns";
 import type { Pagination } from "@/lib/emergencyReports";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -17,6 +17,7 @@ export type DistributionInput = {
   identifier: string;
   allocation_item_id?: string | null;
   batch_id?: string | null;
+  qr_token?: string | null;
 };
 
 export type DistributionContext = {
@@ -27,6 +28,7 @@ export type DistributionContext = {
   beneficiary?: BeneficiarySummary;
   allocation?: AllocationSummary;
   existing_distribution?: DistributionSummary | null;
+  request_error?: boolean;
 };
 
 type FamilyRecord = Record<string, unknown>;
@@ -53,10 +55,17 @@ export async function resolveDistributionContext(viewer: DashboardViewer | null,
   const barangay = assignedBarangayForUser(viewer);
   if (!barangay) return { status: "UNAUTHORIZED", reason: "Your account is not assigned to a barangay." };
 
-  const batchId = stringifyOrNull(input.batch_id);
-  if (!batchId) {
-    return { status: "CAMPAIGN_NOT_ACTIVE", viewer, role, reason: "Select a relief campaign before verifying beneficiaries." };
+  const campaignIdentifier = await resolveCampaignBatchId(input);
+  if (!campaignIdentifier.batchId) {
+    return {
+      status: "CAMPAIGN_NOT_ACTIVE",
+      viewer,
+      role,
+      request_error: campaignIdentifier.requestError,
+      reason: "reason" in campaignIdentifier ? campaignIdentifier.reason : "Unable to resolve the relief campaign.",
+    };
   }
+  const batchId = campaignIdentifier.batchId;
 
   const campaign = await getCampaign(batchId);
   if (!campaign) {
@@ -138,6 +147,29 @@ export async function resolveDistributionContext(viewer: DashboardViewer | null,
     allocation: allocationSummary,
     existing_distribution: null,
   };
+}
+
+async function resolveCampaignBatchId(input: DistributionInput): Promise<{ batchId: string; requestError?: false } | { batchId: null; requestError: boolean; reason: string }> {
+  const batchId = stringifyOrNull(input.batch_id);
+  const qrToken = stringifyOrNull(input.qr_token);
+
+  if (!batchId && !qrToken) {
+    return { batchId: null, requestError: false, reason: "Select a relief campaign before verifying beneficiaries." };
+  }
+
+  let tokenBatchId: string | null = null;
+  if (qrToken) {
+    tokenBatchId = await resolveCampaignBatchIdByQrToken(qrToken);
+    if (!tokenBatchId) {
+      return { batchId: null, requestError: true, reason: "Campaign QR token was not found." };
+    }
+  }
+
+  if (batchId && tokenBatchId && batchId !== tokenBatchId) {
+    return { batchId: null, requestError: true, reason: "batchId and qrToken refer to different campaigns." };
+  }
+
+  return { batchId: batchId ?? tokenBatchId! };
 }
 
 export async function getDistributionHistoryForViewer(viewer: DashboardViewer | null) {

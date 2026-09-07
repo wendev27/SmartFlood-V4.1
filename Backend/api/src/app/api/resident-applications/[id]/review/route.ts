@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
+import { assignedBarangayForUser, isSameBarangayForUser } from "@/lib/barangayScope";
+import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
 import { fullName, familyVulnerabilityPayload, pickResidentPayload } from "@/lib/residentPayload";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -11,6 +13,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await req.json();
+    const viewer = await getDashboardViewer(req);
+    const role = dashboardViewerRole(viewer);
+    if (!viewer) return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+    if (role !== "super" && role !== "cswdd" && role !== "barangay") return NextResponse.json({ success: false, error: "You do not have access to review resident applications." }, { status: 403 });
     const action = body.action;
 
     if (action !== "approved" && action !== "rejected") {
@@ -25,6 +31,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (applicationError) {
       return NextResponse.json({ success: false, error: applicationError.message }, { status: 500 });
+    }
+
+    const selectedScope = role === "barangay" ? assignedBarangayForUser(viewer) : body.barangay_id == null ? null : { barangay_id: Number(body.barangay_id), barangay_name: body.barangay_name };
+    if (selectedScope && (!Number.isInteger(selectedScope.barangay_id) || !isSameBarangayForUser(selectedScope, application))) {
+      return NextResponse.json({ success: false, error: "This application is outside the selected barangay scope." }, { status: 404 });
     }
 
     if (application.status === "approved" || application.status === "rejected") {

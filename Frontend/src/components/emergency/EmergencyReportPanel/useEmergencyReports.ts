@@ -4,8 +4,10 @@ import { advanceIncident, getIncident, getIncidentList } from "@/services/emerge
 import { incidentPresentation, incidentStatusForLabel } from "@/adapters/emergencyIncidentPresentation";
 import type { IncidentList } from "@/types/emergencyIncident";
 import type { EmergencyReportPresentationProps, EmergencyReportViewModel } from "./EmergencyReportPanel";
+import { barangayIdForName } from "@/lib/barangayScope";
 const message = (error: unknown) => error instanceof Error ? error.message : "Unable to load emergency reports.";
-export function useEmergencyReports(): EmergencyReportPresentationProps {
+export function useEmergencyReports(barangayScope?: string): EmergencyReportPresentationProps {
+  const barangayId = barangayIdForName(barangayScope);
   const [view, setView] = useState<EmergencyReportPresentationProps["view"]>("main");
   const [status, setStatus] = useState<EmergencyReportPresentationProps["statusFilter"]>("Pending");
   const [query, setQuery] = useState("");
@@ -27,13 +29,13 @@ export function useEmergencyReports(): EmergencyReportPresentationProps {
     if (view === "main") return;
     let cancelled = false;
     setState("loading"); setError("");
-    getIncidentList(view === "history" ? "resolved" : incidentStatusForLabel[status], search, page).then(result => {
+    getIncidentList(view === "history" ? "resolved" : incidentStatusForLabel[status], search, page, barangayId).then(result => {
       if (cancelled) return;
       if (page > 1 && result.reports.length === 0) { setPage(Math.max(1, result.pagination.total_pages)); return; }
       setData(result); setState("ready");
     }).catch(error => { if (!cancelled) { setError(message(error)); setState("error"); } });
     return () => { cancelled = true; };
-  }, [view, status, search, page, refresh]);
+  }, [view, status, search, page, refresh, barangayId]);
   // Refresh persisted reports when mobile submission/confirmation happens outside this page.
   useEffect(() => {
     if (view === "main") return;
@@ -46,11 +48,11 @@ export function useEmergencyReports(): EmergencyReportPresentationProps {
     if (!selected || updating) return;
     let cancelled = false;
     const ticket = detailRequest.current;
-    getIncident(selected.id).then(result => {
-      if (!cancelled && ticket === detailRequest.current) setSelected(incidentPresentation(result));
+    getIncident(selected.id, barangayId).then(result => {
+      if (!cancelled && ticket === detailRequest.current) setSelected(incidentPresentation(result, barangayId));
     }).catch(error => { if (!cancelled && ticket === detailRequest.current) setUpdateError(message(error)); });
     return () => { cancelled = true; };
-  }, [refresh, selected?.id, updating]);
+  }, [refresh, selected?.id, updating, barangayId]);
   const close = () => { detailRequest.current++; setSelected(null); setConfirmed(null); setUpdateError(""); };
   return {
     view, state, statusFilter: status, query,
@@ -65,7 +67,7 @@ export function useEmergencyReports(): EmergencyReportPresentationProps {
     async onSelectReport(report) {
       const ticket = ++detailRequest.current;
       setConfirmed(null); setUpdateError("");
-      try { const result = await getIncident(report.id); if (mounted.current && ticket === detailRequest.current) setSelected(incidentPresentation(result)); }
+      try { const result = await getIncident(report.id, barangayId); if (mounted.current && ticket === detailRequest.current) setSelected(incidentPresentation(result, barangayId)); }
       catch (error) { if (mounted.current && ticket === detailRequest.current) { setError(message(error)); setState("error"); } }
     },
     isUpdating: updating, updateError, confirmedUpdate: confirmed, onDismissUpdate: () => setConfirmed(null),
@@ -74,10 +76,10 @@ export function useEmergencyReports(): EmergencyReportPresentationProps {
       const ticket = detailRequest.current;
       setUpdating(true); setUpdateError(""); setConfirmed(null);
       try {
-        const result = await advanceIncident(report.id, next === "En Route" ? "en_route" : "arrived");
+        const result = await advanceIncident(report.id, next === "En Route" ? "en_route" : "arrived", barangayId);
         if (!mounted.current) return;
         if (ticket === detailRequest.current) {
-          setSelected(incidentPresentation(result));
+          setSelected(incidentPresentation(result, barangayId));
           const label = result.status === "en_route" ? "En Route" : result.status === "arrived" ? "Arrived" : null;
           if (label) setConfirmed({ status: label, message: label === "En Route" ? "You are now en route to the location." : "You have arrived at the location." });
         }

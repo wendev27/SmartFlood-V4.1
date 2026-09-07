@@ -53,8 +53,8 @@ export interface EmergencyReportPresentationProps {
 }
 
 /** Connect the existing REY presentation through a typed API controller. */
-export function EmergencyReportPanel() {
-  const props = useEmergencyReports();
+export function EmergencyReportPanel({ barangayScope }: { barangayScope?: string } = {}) {
+  const props = useEmergencyReports(barangayScope);
   return <EmergencyReportPresentation {...props} />;
 }
 

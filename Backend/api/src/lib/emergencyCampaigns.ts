@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { assignedBarangayForUser } from "@/lib/barangayScope";
 import { logAuditEvent } from "@/lib/auditLogger";
 import { auditActorForViewer, dashboardViewerRole, type DashboardViewer } from "@/lib/dashboardViewer";
@@ -20,6 +21,29 @@ export async function getCampaign(batchId: string) {
 
   if (error) throw new Error(error.message);
   return data ? normalizeCampaign(data as Record<string, unknown>) : null;
+}
+
+export async function getEncryptedCampaignQrToken(batchId: string) {
+  const { data, error } = await supabaseServer
+    .from("emergency_allocation_batches")
+    .select("qr_token_encrypted")
+    .eq("batch_id", batchId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return typeof data?.qr_token_encrypted === "string" ? data.qr_token_encrypted : null;
+}
+
+export async function resolveCampaignBatchIdByQrToken(qrToken: string) {
+  const qrTokenHash = createHash("sha256").update(qrToken, "utf8").digest("hex");
+  const { data, error } = await supabaseServer
+    .from("emergency_allocation_batches")
+    .select("batch_id")
+    .eq("qr_token_hash", qrTokenHash)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data?.batch_id ? String(data.batch_id) : null;
 }
 
 export async function refreshCampaignExpiration(campaign: Record<string, unknown>, viewer?: DashboardViewer | null) {
@@ -112,7 +136,7 @@ export async function findActiveCampaign(excludeBatchId?: string | null) {
   return null;
 }
 
-export async function listCampaignsForViewer(viewer: DashboardViewer) {
+export async function listCampaignsForViewer(viewer: DashboardViewer, targetBatchId?: string | null) {
   const role = dashboardViewerRole(viewer);
   if (role !== "super" && role !== "cswdd" && role !== "barangay") {
     return { status: "UNAUTHORIZED" as const, reason: "You do not have access to relief campaigns." };
@@ -122,9 +146,11 @@ export async function listCampaignsForViewer(viewer: DashboardViewer) {
     return { status: "UNAUTHORIZED" as const, reason: "Your account is not assigned to a barangay." };
   }
 
-  const { data, error } = await supabaseServer
+  let campaignQuery = supabaseServer
     .from("emergency_allocation_batches")
-    .select(campaignSelect)
+    .select(campaignSelect);
+  if (targetBatchId) campaignQuery = campaignQuery.eq("batch_id", targetBatchId);
+  const { data, error } = await campaignQuery
     .order("created_at", { ascending: false })
     .limit(50);
 

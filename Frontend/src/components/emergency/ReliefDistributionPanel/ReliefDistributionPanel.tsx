@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Pagination as SharedPagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
@@ -13,7 +13,6 @@ import {
   getReliefBeneficiaryStatus,
   getReliefCampaignHistory,
   getReliefDistributionHistory,
-  reliefDistributionScannerUrl,
   verifyReliefDistribution,
 } from "@/services/emergencyService";
 import type {
@@ -27,25 +26,34 @@ import type {
   ReliefReportSummary,
   Pagination,
 } from "@/types/emergency";
+import { CampaignQrCode, downloadCampaignQr } from "@/components/emergency/CampaignQrCode";
+import { useCampaignQrToken } from "@/components/emergency/useCampaignQrToken";
 import styles from "./ReliefDistributionPanel.module.css";
 
 type LoadState = "idle" | "loading" | "verifying" | "confirming";
 const pageSize = 5;
 
-export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () => void; initialView?: "distribution" | "history" } = {}) {
+export function ReliefDistributionPanel({ onBack, initialView, mode, barangayScope, forceBarangayView = false }: {
+  onBack?: () => void;
+  initialView?: "distribution" | "history";
+  mode?: "distribution" | "history";
+  barangayScope?: string;
+  forceBarangayView?: boolean;
+} = {}) {
   const currentUser = getCurrentUser();
   const role = normalizeUserRole(currentUser);
-  if (role === "super" || role === "cswdd") return <CswddDistributionModule onBack={onBack} initialView={initialView} />;
+  if (!forceBarangayView && (role === "super" || role === "cswdd")) return <CswddDistributionModule onBack={onBack} initialView={initialView ?? mode} />;
 
   const [campaigns, setCampaigns] = useState<ReliefCampaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<ReliefCampaign | null>(null);
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [isHistoryDateOpen, setIsHistoryDateOpen] = useState(false);
-  const [view, setView] = useState<"distribution" | "history">(initialView ?? "distribution");
-  useEffect(() => { setView(initialView ?? "distribution"); }, [initialView]);
+  const [view, setView] = useState<"distribution" | "history">(initialView ?? mode ?? "distribution");
+  useEffect(() => { setView(initialView ?? mode ?? "distribution"); }, [initialView, mode]);
   const [identifier, setIdentifier] = useState("");
   const [result, setResult] = useState<ReliefDistributionVerifyResponse | null>(null);
+  const [verificationError, setVerificationError] = useState("");
   const [history, setHistory] = useState<ReliefDistributionRecord[]>([]);
   const [historyPagination, setHistoryPagination] = useState<Pagination | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
@@ -57,6 +65,9 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
   const [beneficiarySearch, setBeneficiarySearch] = useState("");
   const [beneficiaryPage, setBeneficiaryPage] = useState(1);
   const [beneficiaryRefreshVersion, setBeneficiaryRefreshVersion] = useState(0);
+  const [historyType, setHistoryType] = useState<"Family / Individual" | "Family" | "Individual">("Family / Individual");
+  const [historyStartDate, setHistoryStartDate] = useState("");
+  const [historyEndDate, setHistoryEndDate] = useState("");
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,14 +81,27 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
     () => campaigns.filter((campaign) => ["completed", "closed", "expired"].includes(campaign.status)),
     [campaigns],
   );
+  const qr = useCampaignQrToken(selectedCampaign?.batch_id ?? null);
+  const qrSvgRef = useRef<SVGSVGElement | null>(null);
+  const requestBusy = useRef(false);
+  const verifiedInput = useRef<{ identifier: string; token: string | null; batchId: string } | null>(null);
+
   const selectedIsActive = selectedCampaign?.status === "in_distribution";
   const selectedIsDistributable = Boolean(
     selectedCampaign?.status === "in_distribution"
     && (selectedCampaign.progress?.barangays ?? []).some((barangay) => barangay.barangay_status === "family_heads_notified"),
   );
   const receivedCount = historyPagination?.total ?? history.filter((record) => record.status === "received").length;
-  const barangayCount = selectedCampaign?.progress?.total_barangays ?? selectedCampaign?.progress?.barangays?.length ?? 0;
-  const selectedScope = selectedCampaign ? campaignScopeLabel(selectedCampaign) : "No campaign selected";
+  const barangayCount = barangayScope ? 1 : selectedCampaign?.progress?.total_barangays ?? selectedCampaign?.progress?.barangays?.length ?? 0;
+  const selectedScope = barangayScope || (selectedCampaign ? campaignScopeLabel(selectedCampaign) : "No campaign selected");
+  const filteredDistributionHistory = useMemo(() => history.filter((record) => {
+    const timestamp = record.verified_at ?? record.created_at;
+    if (!timestamp) return !historyStartDate && !historyEndDate;
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return false;
+    const day = localDateKey(date);
+    return (!historyStartDate || day >= historyStartDate) && (!historyEndDate || day <= historyEndDate);
+  }), [history, historyEndDate, historyStartDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +182,7 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
           pageSize,
         );
         if (!cancelled) {
-          setBeneficiaryStatusRows(response.beneficiaries);
+          setBeneficiaryStatusRows(response.beneficiaries.map((row) => ({ ...row, status_label: distributionStatusLabel(row.status_label) })));
           setBeneficiarySummary(response.summary);
           setBeneficiaryPagination(response.pagination);
           setError(null);
@@ -195,11 +219,6 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
     setError(null);
   }
 
-  function openScannerWindow() {
-    if (!selectedCampaign || !selectedIsDistributable) return;
-    window.open(reliefDistributionScannerUrl(selectedCampaign.batch_id), "_blank", "noopener,noreferrer");
-  }
-
   async function exportCampaignRecords() {
     if (!selectedCampaign) return;
     const allHistory = await fetchAllDistributionHistory(selectedCampaign.batch_id);
@@ -212,8 +231,15 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
     });
   }
 
+  function openDistribution() {
+    if (!selectedCampaign) return;
+    const url = `/dashboard/reliefDistribution/scan?batchId=${encodeURIComponent(selectedCampaign.batch_id)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function handleVerify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (requestBusy.current || qr.loading) return;
     if (!selectedCampaign) {
       setError("Select a relief campaign before verifying beneficiaries.");
       return;
@@ -230,30 +256,38 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
     }
 
     try {
+      requestBusy.current = true;
+      verifiedInput.current = null;
+      setResult(null);
       setState("verifying");
       setMessage(null);
       setError(null);
-      const verification = await verifyReliefDistribution(selectedCampaign.batch_id, trimmed);
+      const verification = await verifyReliefDistribution(selectedCampaign.batch_id, trimmed, qr.token);
       setResult(verification);
-      if (verification.result === "ELIGIBLE") setMessage(`Beneficiary is eligible for ${selectedCampaign.plan_name}.`);
+      if (verification.result === "ELIGIBLE") verifiedInput.current = { identifier: trimmed, token: qr.token, batchId: selectedCampaign.batch_id };
+      if (verification.result === "ELIGIBLE") setMessage(`Beneficiary is ready for ${selectedCampaign.plan_name}.`);
       if (verification.result === "ALREADY_RECEIVED") setMessage(`Relief already received for ${selectedCampaign.plan_name}.`);
       if (!["ELIGIBLE", "ALREADY_RECEIVED"].includes(verification.result)) setError(resultMessage(verification));
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : "Unable to verify beneficiary.");
       setResult(null);
     } finally {
+      requestBusy.current = false;
       setState("idle");
     }
   }
 
   async function handleConfirm() {
+    if (requestBusy.current || !verifiedInput.current) return;
+    const verified = verifiedInput.current;
     if (!selectedCampaign || !identifier.trim() || result?.result !== "ELIGIBLE") return;
 
     try {
+      requestBusy.current = true;
       setState("confirming");
       setMessage(null);
       setError(null);
-      const confirmation = await confirmReliefDistribution(selectedCampaign.batch_id, identifier.trim(), result.data?.allocation?.item_id);
+      const confirmation = await confirmReliefDistribution(verified.batchId, verified.identifier, result.data?.allocation?.item_id, verified.token);
       setResult(confirmation);
       if (confirmation.result === "RECEIVED") {
         setMessage(`Relief distribution confirmed for ${selectedCampaign.plan_name}.`);
@@ -269,8 +303,73 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "Unable to confirm relief distribution.");
     } finally {
+      requestBusy.current = false;
       setState("idle");
     }
+  }
+
+  if (mode === "history") {
+    const showFamilies = historyType !== "Individual";
+    const showIndividuals = historyType !== "Family";
+    return (
+      <section className={styles.polishedHistory} aria-label="Relief distribution history">
+        {error ? <p className={styles.errorMessage}>{error}</p> : null}
+        <div className={styles.historyFilterRow}>
+          <label><span>Barangay</span><select value={selectedCampaign?.batch_id ?? ""} onChange={(event) => { const campaign = campaigns.find((item) => item.batch_id === event.target.value); if (campaign) selectCampaign(campaign); }}>{campaigns.length === 0 ? <option value="">No barangay campaigns</option> : campaigns.map((campaign) => <option key={campaign.batch_id} value={campaign.batch_id}>{campaignScopeLabel(campaign)}</option>)}</select></label>
+          <label><span>Type of</span><select value={historyType} onChange={(event) => setHistoryType(event.target.value as typeof historyType)}><option>Family / Individual</option><option>Family</option><option>Individual</option></select></label>
+          <div className={styles.dateRangeControl}>
+            <span>Date Range</span>
+            <button type="button" aria-expanded={isHistoryDateOpen} onClick={() => setIsHistoryDateOpen((open) => !open)}><CalendarIcon />{historyDateLabel(historyStartDate, historyEndDate)}<ChevronIcon /></button>
+            {isHistoryDateOpen ? <div className={styles.datePopover}>
+              <label>Start date<input type="date" value={historyStartDate} max={historyEndDate || undefined} onChange={(event) => setHistoryStartDate(event.target.value)} /></label>
+              <label>End date<input type="date" value={historyEndDate} min={historyStartDate || undefined} onChange={(event) => setHistoryEndDate(event.target.value)} /></label>
+              <button type="button" onClick={() => setIsHistoryDateOpen(false)}>Apply Date Range</button>
+            </div> : null}
+          </div>
+        </div>
+        <section className={styles.historyTables} aria-label="Relief distribution records">
+          {showFamilies ? <HistoryRecordsTable label="Family" records={filteredDistributionHistory} /> : null}
+          {showIndividuals ? <HistoryRecordsTable label="Individual" records={[]} /> : null}
+        </section>
+        <SharedPagination pagination={historyPagination} onPageChange={setHistoryPage} label="Distribution history" />
+      </section>
+    );
+  }
+
+  if (mode === "distribution") {
+    return (
+      <section className={styles.polishedDistribution} aria-label="Relief distribution">
+        {message ? <p className={styles.stateMessage}>{message}</p> : null}
+        {error ? <p className={styles.errorMessage}>{error}</p> : null}
+        <section className={styles.allocationSummaryCard}>
+          <div className={styles.allocationTitleRow}><h2>{selectedCampaign ? `${selectedScope} Allocation` : "No Relief Program Selected"}</h2></div>
+          {selectedCampaign ? <>
+            <dl className={styles.polishedDetails}>
+              <Detail label="Visit Date" value={formatDate(selectedCampaign.started_at ?? selectedCampaign.accepted_at ?? selectedCampaign.created_at)} />
+              <Detail label="Barangay" value={String(barangayCount)} />
+              <Detail label="Received" value={String(receivedCount)} />
+              <Detail label="Barangay Scope" value={selectedScope} />
+            </dl>
+            <div className={styles.polishedActions}>
+              <button type="button" disabled={!selectedCampaign} onClick={openDistribution}><ScanIcon />Open Distribution</button>
+              <button type="button" onClick={exportCampaignRecords}><DownloadIcon />Export Excel</button>
+            </div>
+          </> : <div className={styles.polishedEmpty}>Select an active relief program to begin distribution.</div>}
+        </section>
+        <div className={styles.verificationGrid}>
+          <section><form onSubmit={handleVerify}>
+            <label htmlFor="beneficiary-identifier">Enter Family/Individual UUID*</label>
+            <div className={styles.identifierRow}><input type="text" id="beneficiary-identifier" value={identifier} onChange={(event) => { setIdentifier(event.target.value); setVerificationError(""); setResult(null); }} placeholder="Enter family or individual UUID" disabled={!selectedCampaign} /><button type="submit" disabled={!selectedCampaign || !identifier.trim() || state === "verifying"}>{state === "verifying" ? "Verifying..." : "Verify"}</button></div>
+          </form></section>
+          <section><h2>Beneficiary Result</h2><div className={cn(styles.resultField, result && styles.resultFieldActive, (verificationError || (result && !["ELIGIBLE", "RECEIVED", "ALREADY_RECEIVED"].includes(result.result))) && styles.resultFieldError)} role={verificationError ? "alert" : undefined}>{verificationError || (result ? resultTitle(result.result) : "Result")}</div>{result?.result === "ELIGIBLE" ? <button className={styles.confirmButton} type="button" disabled={state === "confirming"} onClick={handleConfirm}>{state === "confirming" ? "Confirming..." : "Confirm Relief Received"}</button> : null}</section>
+        </div>
+        <p className={styles.uuidHint}>Enter the UUID (Universal Unique Identifier) if the QR cannot be scanned.</p>
+        <section className={styles.distributionFilters}><button className={styles.allFilter} type="button" onClick={() => { setBeneficiaryFilter("all"); setBeneficiarySearch(""); setBeneficiaryPage(1); }}>All</button><label><SearchIcon /><input value={beneficiarySearch} onChange={(event) => { setBeneficiarySearch(event.target.value); setBeneficiaryPage(1); }} placeholder="Search family name or full name" /></label><button className={styles.zoneFilter} type="button"><PinIcon />Barangay Zone</button></section>
+        <section className={styles.distributionTableCard}><div className={styles.tableWrap}><table className={styles.reportTable}><thead><tr><th>Family</th><th>Assigned Relief</th><th>Status</th><th>Scheduled Date</th><th>Received At</th></tr></thead><tbody>{beneficiaryStatusRows.length === 0 ? <tr><td colSpan={5}><EmptyState searchResult={Boolean(beneficiarySearch || beneficiaryFilter !== "all")} title="No beneficiaries match" description="We couldn’t find any beneficiaries matching your search or active filters." /></td></tr> : beneficiaryStatusRows.map((row) => <tr key={row.family_id}><td>{row.family_name}</td><td>Relief allocation</td><td className={styles.statusCell}>{row.status_label}</td><td>{formatDate(selectedCampaign?.started_at ?? selectedCampaign?.accepted_at ?? selectedCampaign?.created_at)}</td><td>{row.received_at ? formatDate(row.received_at) : "——"}</td></tr>)}</tbody></table></div></section>
+        <SharedPagination pagination={beneficiaryPagination} onPageChange={setBeneficiaryPage} label="Beneficiaries" />
+        <Modal className={styles.qrDialog} isOpen={isQrOpen} labelledBy="relief-qr-title" onClose={() => setIsQrOpen(false)} size="sm"><header className={styles.qrHeader}><div><span>Resident Relief Distribution</span><h3 id="relief-qr-title">Campaign QR Code</h3><p>Campaign QR code availability for the selected relief program.</p></div><button type="button" onClick={() => setIsQrOpen(false)} aria-label="Close QR code">×</button></header><div className={styles.qrBody}>{qr.token ? <CampaignQrCode token={qr.token} svgRef={qrSvgRef} size={300} /> : <div className={styles.qrUnavailable}><ScanIcon /><strong>{qr.loading ? "Loading campaign QR..." : "QR code unavailable"}</strong><p>{qr.error ?? "Select a relief campaign to view its QR code."}</p></div>}<div className={styles.qrCampaign}><span>{selectedScope}</span></div><button className={styles.qrDownload} type="button" disabled={!qr.token} onClick={() => downloadCampaignQr(qrSvgRef.current, selectedCampaign?.batch_id ?? "campaign")}>Download QR Code</button></div></Modal>
+      </section>
+    );
   }
 
   return (
@@ -305,7 +404,7 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
         <div className={styles.polishedActions}>
           <button type="button" onClick={() => setIsQrOpen(true)}><ScanIcon />Open QR Code</button>
           <button type="button" disabled={!selectedCampaign} onClick={exportCampaignRecords}><DownloadIcon />Download History Report</button>
-          <button type="button" disabled={!selectedIsDistributable} onClick={openScannerWindow}><ScanIcon />Open QR Scanner</button>
+          <button type="button" disabled={!selectedIsDistributable} onClick={() => setIsQrOpen(true)}><ScanIcon />Open Distribution</button>
         </div>
       </section>
 
@@ -316,8 +415,9 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
               {selectedIsDistributable ? <form onSubmit={handleVerify}>
                 <label htmlFor="beneficiary-identifier">Enter Family / Resident Identifier*</label>
                 <div className={styles.identifierRow}>
-                  <input id="beneficiary-identifier" autoComplete="off" placeholder="family:uuid or resident:uuid" value={identifier} onChange={(event) => setIdentifier(event.target.value)} />
-                  <button type="submit" disabled={state === "verifying" || state === "confirming"}>{state === "verifying" ? "Verifying..." : "Verify"}</button>
+                  <input id="beneficiary-identifier" autoComplete="off" placeholder="family:uuid or resident:uuid" value={identifier} disabled={state === "verifying" || state === "confirming"}
+                    onChange={(event) => { setIdentifier(event.target.value); setResult(null); setMessage(null); verifiedInput.current = null; }} />
+                  <button type="submit" disabled={qr.loading || state === "verifying" || state === "confirming"}>{state === "verifying" ? "Verifying..." : "Verify"}</button>
                 </div>
                 <p className={styles.campaignDescription}>Verifying for {selectedCampaign.plan_name}. Verification does not mark relief as received.</p>
               </form> : <>
@@ -339,7 +439,7 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
           <p className={styles.uuidHint}>Enter the beneficiary QR value, family ID, or resident ID if the QR cannot be scanned.</p>
           <section className={styles.beneficiarySection} aria-label="Campaign beneficiary status">
             <div className={styles.summaryStats}>
-              <Metric label="Eligible" value={beneficiarySummary?.eligible ?? "Unavailable"} compact />
+              <Metric label="Available" value={beneficiarySummary?.eligible ?? "Unavailable"} compact />
               <Metric label="Received" value={beneficiarySummary?.received ?? "Unavailable"} compact />
               <Metric label="Not Received" value={beneficiarySummary?.not_received ?? "Unavailable"} compact />
               <Metric label="Coverage" value={beneficiarySummary ? `${beneficiarySummary.coverage}%` : "Unavailable"} compact />
@@ -446,13 +546,13 @@ export function ReliefDistributionPanel({ onBack, initialView }: { onBack?: () =
       </Modal>
       <Modal className={styles.qrDialog} isOpen={isQrOpen} labelledBy="relief-qr-title" onClose={() => setIsQrOpen(false)} size="sm">
         <header className={styles.qrHeader}>
-          <div><span>Resident Relief Distribution</span><h3 id="relief-qr-title">Scan Relief QR Code</h3><p>Campaign QR code availability for the selected relief program.</p></div>
+          <div><span>Resident Relief Distribution</span><h3 id="relief-qr-title">Campaign QR Code</h3><p>Campaign QR code availability for the selected relief program.</p></div>
           <button type="button" onClick={() => setIsQrOpen(false)} aria-label="Close QR code">×</button>
         </header>
         <div className={styles.qrBody}>
-          <div className={styles.qrUnavailable}><ScanIcon /><strong>QR code unavailable</strong><p>Campaign QR codes are not available. Use Open QR Scanner to verify beneficiary identifiers.</p></div>
+          {qr.token ? <CampaignQrCode token={qr.token} svgRef={qrSvgRef} size={300} /> : <div className={styles.qrUnavailable}><ScanIcon /><strong>{qr.loading ? "Loading campaign QR..." : "QR code unavailable"}</strong><p>{qr.error ?? "Select a relief campaign to view its QR code."}</p></div>}
           <div className={styles.qrCampaign}><span>{selectedScope}</span></div>
-          <button className={styles.qrDownload} type="button" disabled>Download QR Code</button>
+          <button className={styles.qrDownload} type="button" disabled={!qr.token} onClick={() => downloadCampaignQr(qrSvgRef.current, selectedCampaign?.batch_id ?? "campaign")}>Download QR Code</button>
         </div>
       </Modal>
     </section>
@@ -625,14 +725,14 @@ function resultTone(result?: string) {
 }
 
 function resultTitle(result: string) {
-  if (result === "ELIGIBLE") return "Eligible for Relief";
+  if (result === "ELIGIBLE") return "Ready for Relief";
   if (result === "RECEIVED") return "Relief Distribution Confirmed";
   if (result === "ALREADY_RECEIVED") return "Relief Already Received";
   if (result === "CAMPAIGN_NOT_ACTIVE") return "Campaign Not Active";
   if (result === "WRONG_BARANGAY") return "Wrong Barangay";
-  if (result === "NOT_ELIGIBLE") return "Beneficiary Not Eligible";
+  if (result === "NOT_ELIGIBLE") return "Beneficiary Not Available";
   if (result === "UNAUTHORIZED") return "Unauthorized";
-  return "Beneficiary Not Eligible";
+  return "Beneficiary Not Available";
 }
 
 function resultSubtitle(result: string, campaignName = "this campaign") {
@@ -647,6 +747,10 @@ function resultMessage(response: ReliefDistributionVerifyResponse) {
   return response.reason || resultSubtitle(response.result);
 }
 
+function distributionStatusLabel(value?: string | null) {
+  return String(value ?? "").replace(/eligible\s*-?\s*/gi, "").trim() || "Not Yet Received";
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "Not recorded";
   return new Intl.DateTimeFormat("en", {
@@ -656,6 +760,20 @@ function formatDate(value?: string | null) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function localDateKey(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function historyDateLabel(start: string, end: string) {
+  if (!start && !end) return "Select date range";
+  const format = (value: string) => value ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`)) : "Any date";
+  return `${format(start)} – ${format(end)}`;
+}
+
+function HistoryRecordsTable({ label, records }: { label: "Family" | "Individual"; records: ReliefDistributionRecord[] }) {
+  return <div className={styles.historyTableBlock}><table className={styles.polishedHistoryTable}><thead><tr><th>ID</th><th>{label === "Family" ? "Family Name" : "Last Name"}</th><th>{label === "Family" ? "Family Head" : "First Name"}</th><th>Status</th><th>Type of</th></tr></thead><tbody>{records.length === 0 ? <tr><td colSpan={5}>No {label.toLowerCase()} distribution records found.</td></tr> : records.map((record) => <tr key={record.distribution_id}><td>{shortId(record.family_id)}</td><td>{record.family_name ?? "Family"}</td><td>{record.family_head_name ?? "Not recorded"}</td><td className={styles.receivedStatus}>{formatStatus(record.status)}</td><td className={styles.receivedStatus}>{label}</td></tr>)}</tbody></table></div>;
 }
 
 function campaignTiming(campaign: ReliefCampaign) {
@@ -727,5 +845,6 @@ function formatStatus(value?: string | null) {
 function ScanIcon() { return <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M8 8h8v8H8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function DownloadIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function SearchIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/><path d="m16 16 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>; }
+function PinIcon() { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="2"/></svg>; }
 function CalendarIcon() { return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 3v3M18 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>; }
 function ChevronIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>; }

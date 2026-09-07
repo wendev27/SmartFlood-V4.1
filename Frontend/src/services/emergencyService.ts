@@ -53,20 +53,20 @@ export async function notifyFamilyHeadsForEmergencyAllocation(itemId: string) {
   return response.data ?? null;
 }
 
-export async function verifyReliefDistribution(batchId: string, identifier: string) {
+export async function verifyReliefDistribution(batchId: string | null, identifier: string, qrToken?: string | null) {
   const response = await fetchEnvelope<ReliefDistributionVerifyResponse>("/api/emergency/distribution/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ batchId, identifier }),
+    body: JSON.stringify({ ...(batchId ? { batchId } : {}), identifier, ...(qrToken ? { qrToken } : {}) }),
   });
   return response as ReliefDistributionVerifyResponse;
 }
 
-export async function confirmReliefDistribution(batchId: string, identifier: string, allocationItemId?: string | null) {
+export async function confirmReliefDistribution(batchId: string | null, identifier: string, allocationItemId?: string | null, qrToken?: string | null) {
   const response = await fetchEnvelope<ReliefDistributionVerifyResponse>("/api/emergency/distribution/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ batchId, identifier, allocation_item_id: allocationItemId ?? null }),
+    body: JSON.stringify({ ...(batchId ? { batchId } : {}), identifier, allocation_item_id: allocationItemId ?? null, ...(qrToken ? { qrToken } : {}) }),
   });
   return response as ReliefDistributionVerifyResponse;
 }
@@ -132,4 +132,18 @@ export async function closeReliefCampaign(batchId: string, closureReason: string
     body: JSON.stringify({ closure_reason: closureReason }),
   });
   return response.data ?? null;
+}
+
+export async function getReliefCampaignQrToken(batchId: string) {
+  const data = await fetchJson<{ qr_token: string }>(`/api/emergency/campaigns/${encodeURIComponent(batchId)}/qr`);
+  return data.qr_token;
+}
+
+export async function getReliefCampaignByQrToken(qrToken: string, batchId?: string | null) {
+  const data = await fetchJson<ReliefCampaignHistoryResponse>("/api/emergency/campaigns/history", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qrToken, ...(batchId ? { batchId } : {}) }),
+  });
+  return data.campaigns;
 }

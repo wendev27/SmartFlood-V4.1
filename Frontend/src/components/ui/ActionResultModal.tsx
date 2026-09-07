@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { cn } from "@/lib/cn";
@@ -19,6 +20,7 @@ interface ActionResultModalProps {
   onSecondary?: () => void;
   onClose: () => void;
   variant?: "default" | "cswdd";
+  children?: ReactNode;
 }
 
 const iconPath: Record<ActionResultType, string> = {
@@ -40,6 +42,7 @@ export function ActionResultModal({
   onSecondary,
   onClose,
   variant = "default",
+  children,
 }: ActionResultModalProps) {
   const labelledBy = `action-result-${type}-title`;
   const showActions = Boolean(primaryLabel || secondaryLabel);
@@ -87,6 +90,8 @@ export function ActionResultModal({
         <p className={styles.description}>{description}</p>
 
         {details ? <div className={styles.details}>{details}</div> : null}
+
+        {children}
 
         {showActions ? (
           <div className={styles.actions}>

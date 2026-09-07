@@ -11,12 +11,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, result: "UNAUTHORIZED", error: "Unauthorized." }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const identifier = String(body.qr_identifier ?? body.identifier ?? body.resident_id ?? body.family_id ?? "").trim();
     const context = await resolveDistributionContext(viewer, {
       identifier,
       allocation_item_id: stringifyOrNull(body.allocation_item_id),
       batch_id: stringifyOrNull(body.batch_id ?? body.batchId),
+      qr_token: stringifyOrNull(body.qr_token ?? body.qrToken),
     });
 
     if (context.status !== "ELIGIBLE") {

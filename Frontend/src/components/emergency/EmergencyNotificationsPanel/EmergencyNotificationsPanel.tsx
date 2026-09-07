@@ -369,7 +369,7 @@ function workflowExplanation(notification: EmergencyNotification) {
     return "The barangay has confirmed physical receipt. Family heads can now be notified about the upcoming relief distribution schedule.";
   }
   if (status === "family_heads_notified") {
-    return "Eligible family heads were notified. QR-based distribution verification is not part of this step.";
+    return "Family heads were notified. QR-based distribution verification is not part of this step.";
   }
   return "CSWDD selected this AI relief strategy and sent your barangay allocation for review. Accepting means the barangay agrees to proceed with this allocation; physical receipt must be confirmed separately.";
 }

@@ -53,12 +53,19 @@ test("navigation grouping preserves every V3.2 role destination without granting
     const original = JSON.stringify(items);
     const grouped = navigationPresentation(items, role);
     const flattened = [...grouped.primary, ...grouped.groups.flatMap((group) => group.items)];
-    assert.deepEqual(flattened.map((item) => item.key).sort(), [...keys].sort());
-    assert.equal(new Set(flattened.map((item) => item.key)).size, keys.length);
+    const visibleKeys = role === "barangay" ? keys.filter((key) => key !== "reliefDistribution") : keys;
+    if (role === "super") {
+      assert.deepEqual(grouped.groups.map((group) => group.label), ["CSWDD", "Barangay Tanong", "Barangay Catmon", "Barangay Potrero"]);
+      assert.equal(grouped.groups.filter((group) => group.label.startsWith("Barangay")).every((group) => group.items.some((item) => item.key === "residents") && group.items.some((item) => item.key === "accounts")), true);
+    } else {
+      assert.deepEqual(flattened.map((item) => item.key).sort(), [...visibleKeys].sort());
+      assert.equal(new Set(flattened.map((item) => item.key)).size, visibleKeys.length);
+    }
     assert.equal(JSON.stringify(items), original, "presentation must not mutate role navigation definitions");
     assert.equal(flattened.find((item) => item.key === "dashboard").label, "Home");
     if (role !== "super") assert.equal(grouped.groups.length, 0, "REY uses flat role navigation outside the super-user groups");
-    assert.ok(flattened.every((item) => item.key !== "reliefDistribution" || !/Emergency Report/.test(item.label)));
+    assert.equal(flattened.some((item) => item.key === "reliefDistribution"), role !== "barangay" && keys.includes("reliefDistribution"));
+    if (role !== "super") assert.ok(flattened.every((item) => item.key !== "reliefDistribution" || !/Emergency Report/.test(item.label)));
   }
 });
 

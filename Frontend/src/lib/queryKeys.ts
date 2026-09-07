@@ -25,11 +25,11 @@ export const queryKeys = {
     emergency: ["emergency", "notifications"] as const,
   },
   residents: {
-    list: ["residents"] as const,
-    families: (search = "") => ["families", search] as const,
+    list: (barangayId?: number) => ["residents", barangayId ?? "all"] as const,
+    families: (search = "", barangayId?: number) => ["families", search, barangayId ?? "all"] as const,
   },
   verification: {
-    applications: ["verification", "applications"] as const,
+    applications: (barangayId?: number) => ["verification", "applications", barangayId ?? "all"] as const,
   },
   accounts: {
     users: ["accounts", "users"] as const,

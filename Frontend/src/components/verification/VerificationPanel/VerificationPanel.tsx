@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ApplicationFormValues, ModalMode, VerificationApplication, VerificationStatus } from "@/types/verification";
 import { withAuditActor } from "@/lib/auditClient";
 import { normalizeBarangayForCompare } from "@/lib/formatters";
+import { barangayIdForName } from "@/lib/barangayScope";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import { fetchJson } from "@/services/apiClient";
 import { getVerificationApplications } from "@/services/verificationService";
@@ -20,9 +21,10 @@ import { ReviewModal } from "@/components/verification/ReviewModal/ReviewModal";
 import { SmartFloodIcon } from "@/components/icons/SmartFloodIcon";
 import styles from "./VerificationPanel.module.css";
 
-export function VerificationPanel() {
+export function VerificationPanel({ barangayScope }: { barangayScope?: string } = {}) {
   const pageSize = 5;
   const queryClient = useQueryClient();
+  const scopedBarangayId = barangayIdForName(barangayScope);
   const [activeTab, setActiveTab] = useState<VerificationStatus>("pending");
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isApplicationOpen, setIsApplicationOpen] = useState(false);
@@ -38,11 +40,16 @@ export function VerificationPanel() {
     details: "",
   });
   const applicationsQuery = useQuery({
-    queryKey: queryKeys.verification.applications,
-    queryFn: getVerificationApplications,
+    queryKey: queryKeys.verification.applications(scopedBarangayId),
+    queryFn: () => getVerificationApplications(scopedBarangayId),
     staleTime: queryStaleTime.admin,
   });
-  const applications = useMemo(() => (applicationsQuery.data ?? []).map(mapApplication), [applicationsQuery.data]);
+  const applications = useMemo(() => {
+    const rows = (applicationsQuery.data ?? []).map(mapApplication);
+    if (!barangayScope) return rows;
+    const expected = normalizeBarangayForCompare(barangayScope).replace(/^barangay\s+/, "");
+    return rows.filter((application) => normalizeBarangayForCompare(application.barangay).replace(/^barangay\s+/, "") === expected);
+  }, [applicationsQuery.data, barangayScope]);
   const isLoading = applicationsQuery.isPending;
   const isBackgroundRefreshing = applicationsQuery.isFetching && !applicationsQuery.isPending;
   const error = applicationsQuery.error instanceof Error ? applicationsQuery.error.message : applicationsQuery.error ? "Unable to load applications." : "";
@@ -123,6 +130,7 @@ export function VerificationPanel() {
       action,
       admin_review_notes: action === "approved" ? "Approved from SmartFlood admin dashboard" : "Rejected from SmartFlood admin dashboard",
     };
+    if (scopedBarangayId) body.barangay_id = scopedBarangayId;
 
     if (action === "approved" && !selectedApplication.raw?.is_family_head) {
       body.selected_family_id = selectedFamilyId || window.prompt("Enter selected family ID for this resident");
@@ -148,9 +156,9 @@ export function VerificationPanel() {
     setIsReviewOpen(false);
     setSelectedApplication(null);
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.verification.applications }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.residents.list }),
-      queryClient.invalidateQueries({ queryKey: ["families"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.verification.applications(scopedBarangayId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.residents.list(scopedBarangayId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.residents.families("", scopedBarangayId) }),
     ]);
     setResultModal({
       open: true,

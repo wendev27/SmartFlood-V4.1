@@ -28,10 +28,12 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  font-family: inherit;
 }
 
 html,
 body {
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
   margin: 0;
   max-width: 100%;
   min-height: 100%;

@@ -12,14 +12,22 @@ export async function GET(req: NextRequest) {
     if (!viewer) return unauthorized();
     if (role !== "super" && role !== "cswdd" && role !== "barangay") return forbidden();
 
-    const { data, error } = await supabaseServer
+    const requestedBarangayId = parseBarangayId(new URL(req.url).searchParams.get("barangay_id"));
+    if (requestedBarangayId.error) return NextResponse.json({ success: false, error: requestedBarangayId.error }, { status: 400 });
+    const scopedBarangayId = role === "barangay" ? assignedBarangayForUser(viewer)?.barangay_id ?? null : requestedBarangayId.value;
+    if (role === "barangay" && scopedBarangayId == null) return forbidden("Barangay assignment is required for this account.");
+
+    let query = supabaseServer
       .from("residents_v3")
       .select("resident_id,last_name,first_name,middle_name,suffix,age,sex,contact_number,complete_address,street,barangay_id,barangay_name,is_family_head,family_id,status,created_at,updated_at")
       .or("status.is.null,status.neq.inactive")
       .order("created_at", { ascending: false });
 
+    if (scopedBarangayId != null) query = query.eq("barangay_id", scopedBarangayId);
+    const { data, error } = await query;
+
     if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-    return NextResponse.json({ success: true, data: role === "barangay" ? (data ?? []).filter((resident: Record<string, unknown>) => isSameBarangayForUser(viewer, resident)) : data });
+    return NextResponse.json({ success: true, data });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
@@ -181,4 +189,10 @@ function unauthorized() {
 
 function forbidden(error = "You do not have access to manage resident records.") {
   return NextResponse.json({ success: false, error }, { status: 403 });
+}
+
+function parseBarangayId(raw: string | null) {
+  if (raw == null || raw.trim() === "") return { value: undefined as number | undefined };
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? { value } : { error: "barangay_id must be a positive integer" };
 }

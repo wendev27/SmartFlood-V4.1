@@ -522,6 +522,13 @@
 .reportTable td { color: #1e1e1e; font-size: 12px; font-weight: 400; padding: 16px 12px; }
 .historyList article { background: #fff; border: 0; border-bottom: 1px solid #f3f4f6; border-radius: 0; padding: 16px 12px; }
 
+.historyTables { margin-top: 52px; }
+.distributionMode > .summary { display: none; }
+.distributionMode > .selectedCampaignCard { min-height: 344px; padding: 32px 36px 28px; }
+.distributionMode > .layout { gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.zoneFilter { align-items: center; background: #fff; border: 1px solid rgba(30,30,30,.58); border-radius: 16px; color: rgba(30,30,30,.58); display: flex; font-size: 16px; gap: 12px; height: 38px; padding: 0 14px; width: 168px; }
+.zoneFilter svg { color: #0088ff; }
+
 .polishedHistory { color: #1e1e1e; display: flex; flex-direction: column; min-height: calc(100dvh - 210px); }
 .historyFilterRow { display: grid; gap: 28px; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 10px auto 0; max-width: 1000px; width: 100%; }
 .historyFilterRow > label,
@@ -794,7 +801,7 @@
 .qrHeader p { color:#64748b; font-size:13px; margin:0; }
 .qrHeader button { align-items:center; background:#e5f2ff; border:0; border-radius:9px; color:#0088ff; display:flex; font-size:22px; height:38px; justify-content:center; width:38px; }
 .qrBody { align-items:center; display:flex; flex-direction:column; padding:24px 30px 30px; text-align:center; }
-.qrBody > img { background:#fff; border:1px solid #dbe8f5; border-radius:14px; height:min(300px,70vw); padding:10px; width:min(300px,70vw); }
+.qrBody > img, .qrBody > svg { background:#fff; border:1px solid #dbe8f5; border-radius:14px; height:min(300px,70vw); padding:10px; width:min(300px,70vw); }
 .qrCampaign { display:flex; flex-direction:column; gap:4px; margin-top:16px; }
 .qrCampaign strong { color:#1e1e1e; font-size:17px; }
 .qrCampaign span { color:#64748b; font-size:14px; }
@@ -808,8 +815,10 @@
 .qrUnavailable svg { color: #0088ff; height: 48px; margin-bottom: 16px; width: 48px; }
 .qrUnavailable strong { color: #1e1e1e; font-size: 18px; }
 .qrUnavailable p { font-size: 14px; line-height: 1.5; margin-bottom: 0; }
-.qrDownload { background: #0088ff; border: 0; border-radius: 10px; color: #fff; cursor: not-allowed; font-size: 14px; font-weight: 700; margin-top: 18px; opacity: .55; padding: 12px 24px; }
+.qrDownload { background: #0088ff; border: 0; border-radius: 10px; color: #fff; cursor: pointer; font-size: 14px; font-weight: 700; margin-top: 18px; padding: 12px 24px; }
 .historyFilterRow { margin-bottom: 28px; }
 .historyFilterRow select:disabled,.datePopover input:disabled { background-color: #f8fafc; color: #64748b; cursor: not-allowed; }
 .datePopover > button:disabled { cursor: not-allowed; opacity: .55; }
 .dateUnavailable { color: #64748b; font-size: 12px; grid-column: 1/-1; line-height: 1.4; margin: 0; }
+
+.qrDownload:disabled { cursor: not-allowed; opacity: .55; }

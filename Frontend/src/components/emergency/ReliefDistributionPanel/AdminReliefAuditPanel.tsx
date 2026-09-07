@@ -160,7 +160,7 @@ export function AdminReliefAuditPanel() {
             <Detail label="Started" value={formatDate(selectedCampaign.started_at ?? selectedCampaign.accepted_at ?? selectedCampaign.created_at)} />
             <Detail label="Closed / Expiration" value={formatDate(selectedCampaign.closed_at ?? selectedCampaign.expires_at)} />
             <Detail label="Barangays" value={String(summary?.barangays ?? selectedCampaign.progress?.total_barangays ?? 0)} />
-            <Detail label="Eligible" value={String(summary?.eligible ?? 0)} />
+            <Detail label="Available" value={String(summary?.eligible ?? 0)} />
             <Detail label="Received" value={String(summary?.received ?? 0)} />
             <Detail label="Not Received" value={String(summary?.not_received ?? 0)} />
             <Detail label="Coverage" value={summary ? `${summary.coverage}%` : "0%"} />
@@ -179,14 +179,14 @@ export function AdminReliefAuditPanel() {
             <header className={styles.cardHeader}>
               <span>Campaign Breakdown</span>
               <h3>Barangay Coverage</h3>
-              <p>Eligible, received, and not-yet-served counts for this selected batch.</p>
+              <p>Available, received, and not-yet-served counts for this selected batch.</p>
             </header>
             <div className={styles.tableWrap}>
               <table className={styles.reportTable}>
                 <thead>
                   <tr>
                     <th>Barangay</th>
-                    <th>Eligible</th>
+                    <th>Available</th>
                     <th>Received</th>
                     <th>Not Received</th>
                     <th>Coverage</th>
@@ -194,7 +194,7 @@ export function AdminReliefAuditPanel() {
                 </thead>
                 <tbody>
                   {barangays.length === 0 ? (
-                    <tr><td colSpan={5}>No barangay eligibility data for this campaign yet.</td></tr>
+                    <tr><td colSpan={5}>No barangay availability data for this campaign yet.</td></tr>
                   ) : paginatedBarangays.rows.map((row) => (
                     <tr key={row.barangay_id}>
                       <td>{row.barangay_name}</td>
@@ -222,9 +222,9 @@ export function AdminReliefAuditPanel() {
 
           <section className={styles.card}>
             <header className={styles.cardHeader}>
-              <span>Campaign Eligibility</span>
-              <h3>Eligible Beneficiaries Not Yet Served</h3>
-              <p>Families notified as eligible for this campaign with no matching receipt record for this batch.</p>
+              <span>Campaign Availability</span>
+              <h3>Beneficiaries Not Yet Served</h3>
+              <p>Families notified for this campaign with no matching receipt record for this batch.</p>
             </header>
             <NotReceivedList records={notReceived} />
             <SharedPagination pagination={notReceivedPagination} onPageChange={setNotReceivedPage} label="Not-received beneficiaries" />
@@ -326,7 +326,7 @@ function RecordList({ records }: { records: ReliefDistributionRecord[] }) {
 }
 
 function NotReceivedList({ records }: { records: ReliefNotReceivedBeneficiary[] }) {
-  if (records.length === 0) return <div className={styles.emptyState}>No eligible beneficiaries are pending service on this campaign page.</div>;
+  if (records.length === 0) return <div className={styles.emptyState}>No beneficiaries are pending service on this campaign page.</div>;
   return (
     <div className={styles.historyList}>
       {records.map((record) => (

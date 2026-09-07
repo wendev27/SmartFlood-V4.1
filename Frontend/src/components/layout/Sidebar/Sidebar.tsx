@@ -7,22 +7,23 @@ import type { DashboardRole, NavItem, PageKey } from "@/types/navigation";
 import { NavActionItem, NavLinkItem, SidebarIcon } from "@/components/navigation/NavLinkItem/NavLinkItem";
 import { useDashboardPresentation } from "@/components/layout/DashboardPresentationContext";
 import { profileSealForRole } from "@/adapters/profilePresentation";
-import type { DashboardUserProfile } from "@/components/layout/AppShell/AppShell";
+import type { AdminViewContext, DashboardUserProfile } from "@/components/layout/AppShell/AppShell";
 import { navigationPresentation } from "@/adapters/navigationPresentation";
 import { clearStoredSession } from "@/lib/authSession";
 import styles from "./Sidebar.module.css";
 
 interface SidebarProps {
   userRole?: DashboardRole;
+  adminView?: AdminViewContext | null;
   activePage: PageKey;
   isOpen: boolean;
   items?: NavItem[];
   userProfile: DashboardUserProfile;
-  onNavigate: (page: PageKey) => void;
+  onNavigate: (page: PageKey, adminView?: AdminViewContext) => void;
   onToggleMobileNav: () => void;
 }
 
-export function Sidebar({ activePage, isOpen, items = navigationItems, userProfile, userRole, onNavigate, onToggleMobileNav }: SidebarProps) {
+export function Sidebar({ activePage, adminView, isOpen, items = navigationItems, userProfile, userRole, onNavigate, onToggleMobileNav }: SidebarProps) {
   const { primary, groups } = navigationPresentation(items, userRole, userProfile.logLabel);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const presentation = useDashboardPresentation();
@@ -65,15 +66,14 @@ export function Sidebar({ activePage, isOpen, items = navigationItems, userProfi
           ))}
           {groups.length > 0 ? <div className={styles.accessGroups}>
             {groups.map((group) => (
-              <details className={styles.accessGroup} key={group.label} open={group.items.some((item) => item.key === activePage) || (presentation?.view === "emergencyReports" && group.items.some((item) => item.key === "residents")) || undefined}>
+              <details className={styles.accessGroup} key={group.label} open={adminView?.label === group.label || group.items.some((item) => item.key === activePage) || (presentation?.view === "emergencyReports" && group.items.some((item) => item.key === "residents")) || undefined}>
                 <summary>
                   {group.label === "CSWDD" ? <img src="/images/cswdd/cswdd-seal.png" alt="" /> : <span className={styles.groupIcon} aria-hidden="true"><SidebarIcon item={{ key: group.items[0].key, label: group.label, icon: group.icon }} /></span>}
                   <span>{group.label}</span>
                   <svg className={styles.chevron} viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
                 </summary>
                 <div className={styles.accessItems}>
-                  {userRole === "super" && group.items.some((item) => item.key === "residents") && presentation ? <NavActionItem item={reportItem} isActive={presentation.view === "emergencyReports"} onClick={() => presentation.open("emergencyReports")} /> : null}
-                  {group.items.map((item) => <NavLinkItem key={item.key} item={item} isActive={!presentation?.view && item.key === activePage} onNavigate={onNavigate} />)}
+                  {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => onNavigate(item.key, { role: "barangay", label: group.label })} />)}
                 </div>
               </details>
             ))}

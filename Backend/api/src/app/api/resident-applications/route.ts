@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auditActorFromBody, logAuditEvent, withoutAuditActor } from "@/lib/auditLogger";
+import { assignedBarangayForUser } from "@/lib/barangayScope";
+import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const { data, error } = await supabaseServer
+    const viewer = await getDashboardViewer(req);
+    const role = dashboardViewerRole(viewer);
+    if (!viewer) return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+    if (role !== "super" && role !== "cswdd" && role !== "barangay") return NextResponse.json({ success: false, error: "You do not have access to resident applications." }, { status: 403 });
+    const requestedBarangayId = parseBarangayId(new URL(req.url).searchParams.get("barangay_id"));
+    if (requestedBarangayId.error) return NextResponse.json({ success: false, error: requestedBarangayId.error }, { status: 400 });
+    const scopedBarangayId = role === "barangay" ? assignedBarangayForUser(viewer)?.barangay_id ?? null : requestedBarangayId.value ?? null;
+    if (role === "barangay" && scopedBarangayId == null) return NextResponse.json({ success: false, error: "Barangay assignment is required for this account." }, { status: 403 });
+    let query = supabaseServer
       .from("resident_applications")
       .select("*")
       .order("created_at", { ascending: false });
+    if (scopedBarangayId != null) query = query.eq("barangay_id", scopedBarangayId);
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -17,6 +29,12 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
+}
+
+function parseBarangayId(raw: string | null) {
+  if (raw == null || raw.trim() === "") return { value: undefined as number | undefined };
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? { value } : { error: "barangay_id must be a positive integer" };
 }
 
 export async function POST(req: NextRequest) {

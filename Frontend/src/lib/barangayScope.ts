@@ -15,6 +15,12 @@ const barangayNamesById = new Map([
   ["3", "Barangay Potrero"],
 ]);
 
+export function barangayIdForName(name?: string | null) {
+  const normalized = normalizeBarangayNameForScope(String(name ?? ""));
+  const entry = Array.from(barangayNamesById.entries()).find(([, label]) => normalizeBarangayNameForScope(label) === normalized);
+  return entry ? Number(entry[0]) : undefined;
+}
+
 export function isSameBarangayForUser(user: BarangayScopedRecord | null | undefined, record: BarangayScopedRecord | null | undefined) {
   const userBarangayId = stringify(user?.barangay_id ?? user?.barangayId);
   const recordBarangayId = stringify(record?.barangay_id ?? record?.barangayId);

@@ -12,7 +12,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { Pagination as SharedPagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
 import { getCurrentUser, type StoredSessionUser } from "@/lib/authSession";
-import { assignedBarangayForUser, isSameBarangayForUser } from "@/lib/barangayScope";
+import { assignedBarangayForUser, barangayIdForName, isSameBarangayForUser } from "@/lib/barangayScope";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import { fetchJson } from "@/services/apiClient";
 import { getFamilies, getResidents } from "@/services/residentsService";
@@ -118,7 +118,7 @@ const vulnerabilityCountFields = [
   "toddler_count",
 ] as const;
 
-export function ResidentsPanel() {
+export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {}) {
   const pageSize = 5;
   const queryClient = useQueryClient();
   const [currentUser] = useState(() => getCurrentUser());
@@ -126,6 +126,7 @@ export function ResidentsPanel() {
   const canManageResidentRecords = canManageResidents(currentUser);
   const isBarangayOfficial = isBarangayUser(currentUser);
   const assignedBarangay = assignedBarangayForUser(currentUser);
+  const scopedBarangayId = barangayIdForName(barangayScope);
   const [residentSearch, setResidentSearch] = useState("");
   const [familySearch, setFamilySearch] = useState("");
   const [residentPage, setResidentPage] = useState(1);
@@ -147,24 +148,24 @@ export function ResidentsPanel() {
     details: "",
   });
   const residentsQuery = useQuery({
-    queryKey: queryKeys.residents.list,
-    queryFn: getResidents,
+    queryKey: queryKeys.residents.list(scopedBarangayId),
+    queryFn: () => getResidents(scopedBarangayId),
     staleTime: queryStaleTime.admin,
     enabled: canViewResidentInfo,
   });
   const familiesQuery = useQuery({
-    queryKey: queryKeys.residents.families(),
-    queryFn: () => getFamilies(),
+    queryKey: queryKeys.residents.families("", scopedBarangayId),
+    queryFn: () => getFamilies("", scopedBarangayId),
     staleTime: queryStaleTime.admin,
     enabled: canViewResidentInfo,
   });
   const residents = useMemo(
-    () => filterRecordsForUser((residentsQuery.data ?? []).map(mapResident), currentUser),
-    [currentUser, residentsQuery.data],
+    () => filterRecordsForBarangay(filterRecordsForUser((residentsQuery.data ?? []).map(mapResident), currentUser), barangayScope),
+    [barangayScope, currentUser, residentsQuery.data],
   );
   const familyClusters = useMemo(
-    () => filterRecordsForUser((familiesQuery.data ?? []).map(mapFamily), currentUser),
-    [currentUser, familiesQuery.data],
+    () => filterRecordsForBarangay(filterRecordsForUser((familiesQuery.data ?? []).map(mapFamily), currentUser), barangayScope),
+    [barangayScope, currentUser, familiesQuery.data],
   );
   const isResidentsLoading = residentsQuery.isPending && canViewResidentInfo;
   const isFamiliesLoading = familiesQuery.isPending && canViewResidentInfo;
@@ -392,9 +393,9 @@ export function ResidentsPanel() {
         details: "Resident information is now available in the live residents table.",
       });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.residents.list }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.residents.list(scopedBarangayId) }),
         queryClient.invalidateQueries({ queryKey: ["families"] }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.verification.applications }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.verification.applications(scopedBarangayId) }),
       ]);
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Unable to save resident. Please try again.";
@@ -1089,6 +1090,12 @@ function residentFormForUser(user: StoredSessionUser | null): ResidentFormState 
 
 function filterRecordsForUser<T extends { barangay_id?: unknown; barangay?: unknown }>(records: T[], user: StoredSessionUser | null) {
   return isBarangayUser(user) ? records.filter((record) => isSameBarangayForUser(user, record)) : records;
+}
+
+function filterRecordsForBarangay<T extends { barangay_id?: unknown; barangay?: unknown; barangay_name?: unknown }>(records: T[], barangayScope?: string) {
+  if (!barangayScope) return records;
+  const expected = normalizeBarangayForCompare(barangayScope).replace(/^barangay\s+/, "");
+  return records.filter((record) => normalizeBarangayForCompare(String(record.barangay_name ?? record.barangay ?? "")).replace(/^barangay\s+/, "") === expected);
 }
 
 function buildResidentPayload(form: ResidentFormState, barangay: { id: string; name: string }) {

@@ -16,7 +16,16 @@ export async function getIncidentActor(request: NextRequest): Promise<IncidentAc
   }
   const viewer = await getDashboardViewer(request);
   if (!viewer) throw new IncidentError(401, "Unauthorized.");
-  if (dashboardViewerRole(viewer) !== "barangay") throw new IncidentError(403, "Only assigned barangay users can access dashboard emergency reports.");
+  const role = dashboardViewerRole(viewer);
+  if (role === "super" || role === "cswdd") {
+    const rawScope = request.nextUrl.searchParams.get("barangay_id");
+    const barangayId = Number(rawScope);
+    if (!rawScope || !Number.isSafeInteger(barangayId) || barangayId < 1) {
+      throw new IncidentError(403, "A barangay scope is required for this dashboard emergency report view.");
+    }
+    return { kind: "barangay", userId: viewer.id, barangayId };
+  }
+  if (role !== "barangay") throw new IncidentError(403, "Only assigned barangay users can access dashboard emergency reports.");
   const barangay = assignedBarangayForUser(viewer);
   if (!barangay || !Number.isSafeInteger(barangay.barangay_id) || barangay.barangay_id < 1) {
     throw new IncidentError(403, "Your account is not assigned to a barangay.");

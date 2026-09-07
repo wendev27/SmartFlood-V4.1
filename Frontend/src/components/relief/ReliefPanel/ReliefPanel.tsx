@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { CampaignQrCode } from "@/components/emergency/CampaignQrCode";
 import { ActionResultModal, type ActionResultType } from "@/components/ui/ActionResultModal";
 import { Button } from "@/components/ui/Button/Button";
 import { DataTable } from "@/components/ui/DataTable/DataTable";
@@ -96,7 +97,7 @@ export function ReliefPanel({ onNavigate }: { onNavigate?: (page: PageKey) => vo
   const [pendingGenerationPayload, setPendingGenerationPayload] = useState<GenerationPayload | null>(null);
   const [confirmedClosureBatchId, setConfirmedClosureBatchId] = useState<string | null>(null);
   const [newAllocationStep, setNewAllocationStep] = useState<NewAllocationStep>("idle");
-  const [resultModal, setResultModal] = useState({
+  const [resultModal, setResultModal] = useState<{ open: boolean; type: ActionResultType; title: string; description: string; details: string; qrToken?: string }>({
     open: false,
     type: "success" as ActionResultType,
     title: "",
@@ -463,6 +464,7 @@ export function ReliefPanel({ onNavigate }: { onNavigate?: (page: PageKey) => vo
         open: true,
         type: "success",
         title: "Recommendation Accepted",
+        qrToken: workflow.qr_token,
         description: `${selectedPlan.plan_name} was recorded in allocation history.`,
         details: workflow.batch_id
           ? `Emergency allocation batch ${shortenId(workflow.batch_id)} was created for Phase 1 review.`
@@ -1087,7 +1089,9 @@ export function ReliefPanel({ onNavigate }: { onNavigate?: (page: PageKey) => vo
         primaryLabel="OK"
         onPrimary={() => setResultModal((current) => ({ ...current, open: false }))}
         onClose={() => setResultModal((current) => ({ ...current, open: false }))}
-      />
+      >
+        {resultModal.type === "success" && resultModal.qrToken ? <CampaignQrCode token={resultModal.qrToken} size={240} /> : null}
+      </ActionResultModal>
     </>
   );
 }

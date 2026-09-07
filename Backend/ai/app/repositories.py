@@ -4,8 +4,10 @@ import logging
 from functools import lru_cache
 from typing import Any, Protocol
 
+import httpx
 from pymongo import MongoClient
 from supabase import Client, create_client
+from supabase.lib.client_options import SyncClientOptions
 
 from .audit import sanitize_audit_event
 from .config import get_settings
@@ -90,8 +92,16 @@ class DatabaseRepository:
 def get_repository() -> SmartFloodRepository:
     settings = get_settings()
     settings.validate()
+    supabase_options = SyncClientOptions()
+    supabase_options.httpx_client = httpx.Client(
+        transport=httpx.HTTPTransport(local_address="0.0.0.0", http2=True),
+        timeout=supabase_options.postgrest_client_timeout,
+        follow_redirects=True,
+    )
     return DatabaseRepository(
-        mongo_client=MongoClient(settings.mongodb_uri),
+        mongo_client=MongoClient(settings.mongodb_uri, connectTimeoutMS=2000),
         mongo_db=settings.mongodb_db,
-        supabase=create_client(settings.supabase_url, settings.supabase_service_role_key),
+        supabase=create_client(
+            settings.supabase_url, settings.supabase_service_role_key, options=supabase_options
+        ),
     )
