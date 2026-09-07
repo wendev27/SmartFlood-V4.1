@@ -160,3 +160,29 @@ export interface BarangayNotificationResponse {
   notifications_created?: number;
   already_notified?: boolean;
 }
+
+export type ResidentReliefRequestStatus = "Pending" | "Endorsed" | "Approved" | "Rejected" | "Completed";
+
+export interface ResidentReliefRequest {
+  id: string;
+  user_id: string;
+  full_name: string;
+  address: string;
+  contact_number: string;
+  request_kind: "family" | "individual";
+  family_name?: string | null;
+  relief_type: string;
+  reason: string;
+  status: ResidentReliefRequestStatus;
+  endorsed_by?: string | null;
+  endorsed_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  rejection_feedback?: string | null;
+  release_date?: string | null;
+  release_time?: string | null;
+  release_details?: string | null;
+  created_at: string;
+  updated_at: string;
+  resident?: { resident_id: string; barangay_id: number | null; barangay_name: string | null; family_id: string | null } | null;
+}

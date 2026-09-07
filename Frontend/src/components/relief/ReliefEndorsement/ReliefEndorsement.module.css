@@ -30,3 +30,19 @@
 .endorsement { min-width: 0; }
 .tabIndicator { transform: translateX(0); }
 .filterBar :disabled { cursor: not-allowed; opacity: .6; }
+.roleHint { color:#64748b; font-size:13px; white-space:nowrap; }
+.tableCard { background:#fff; border-radius:16px; box-shadow:0 6px 18px rgba(37,99,235,.12); margin-top:20px; overflow:auto; }
+.tableCard table { border-collapse:collapse; min-width:900px; width:100%; }
+.tableCard th,.tableCard td { border-bottom:1px solid #e8eef5; padding:14px 16px; text-align:left; vertical-align:middle; }
+.tableCard th { color:#64748b; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+.tableCard td strong,.tableCard td small { display:block; }
+.tableCard td small { color:#64748b; margin-top:3px; }
+.badge { border-radius:999px; display:inline-block; font-size:12px; font-weight:700; padding:5px 10px; }
+.statusPending { background:#fff7df; color:#946200; }.statusEndorsed { background:#eaf3ff; color:#1769aa; }.statusApproved { background:#e9f8ef; color:#16733b; }.statusRejected { background:#fff0f0; color:#b3261e; }
+.viewButton,.primaryButton { background:#0088ff; border:0; border-radius:10px; color:#fff; cursor:pointer; font-weight:700; padding:9px 13px; }
+.viewButton { background:#eef6ff; color:#0078e6; }
+.primaryButton:disabled { cursor:wait; opacity:.65; }
+.message { color:#64748b; padding:48px; text-align:center; }
+.error { color:#b3261e; padding:14px 0; }
+.detail h2 { margin:0 0 20px; }.detail dl { display:grid; gap:12px; margin:0 0 20px; }.detail dl div { border-bottom:1px solid #e8eef5; padding-bottom:10px; }.detail dt { color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase; }.detail dd { margin:4px 0 0; white-space:pre-wrap; }
+.review { border-top:1px solid #e8eef5; display:grid; gap:12px; margin-top:20px; padding-top:18px; }.review label { color:#475569; display:grid; font-size:13px; font-weight:700; gap:6px; }.review input,.review textarea { border:1px solid #d5e1ee; border-radius:10px; font:inherit; padding:10px; }.review textarea { min-height:80px; resize:vertical; }.actionButtons { display:flex; gap:8px; }.actionButtons button { background:#f3f7fc; border:1px solid #dbe8f5; border-radius:10px; cursor:pointer; font-weight:700; padding:9px 13px; }.actionButtons .selectedAction { background:#0088ff; border-color:#0088ff; color:#fff; }

@@ -1,6 +1,6 @@
 import { fetchEnvelope, fetchJson } from "@/services/apiClient";
 import { withAuditActor } from "@/lib/auditClient";
-import type { BarangayNotificationResponse, CurrentEmergencyAllocation, EmergencyWorkflowResponse, ReliefGenerationResponse } from "@/types/relief";
+import type { BarangayNotificationResponse, CurrentEmergencyAllocation, EmergencyWorkflowResponse, ReliefGenerationResponse, ResidentReliefRequest } from "@/types/relief";
 
 const AI_GENERATION_TIMEOUT_MS = 60000;
 
@@ -58,4 +58,20 @@ export async function notifyBarangaysForEmergencyAllocation(batchId: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(withAuditActor({})),
   }) as Promise<BarangayNotificationResponse>;
+}
+
+export async function getResidentReliefRequests() {
+  return fetchJson<ResidentReliefRequest[]>("/api/relief-requests");
+}
+
+export async function endorseResidentReliefRequest(id: string) {
+  return fetchJson<ResidentReliefRequest>(`/api/relief-requests/${encodeURIComponent(id)}/endorse`, { method: "POST" });
+}
+
+export async function reviewResidentReliefRequest(id: string, payload: Record<string, unknown>) {
+  return fetchJson<{ result: ResidentReliefRequest }>(`/api/relief-requests/${encodeURIComponent(id)}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
