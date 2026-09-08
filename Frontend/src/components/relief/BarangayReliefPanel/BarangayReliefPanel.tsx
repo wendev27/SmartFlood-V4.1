@@ -45,10 +45,10 @@ export function BarangayReliefPanel({ barangayScope, initialView = "main", notif
       <button className={styles.backButton} type="button" onClick={() => setView("main")}>← Back</button>
       <h1>{title}</h1>
       <div className={styles.content}>
-        {view === "allocation" ? <EmergencyNotificationsPanel openRequest={notificationRequest} onOpenRequestHandled={onNotificationHandled} /> : null}
+        {view === "allocation" ? <EmergencyNotificationsPanel barangayScope={barangayScope} openRequest={notificationRequest} onOpenRequestHandled={onNotificationHandled} /> : null}
         {view === "distribution" ? <ReliefDistributionPanel mode="distribution" barangayScope={barangayScope} forceBarangayView={Boolean(barangayScope)} /> : null}
         {view === "history" ? <ReliefDistributionPanel mode="history" barangayScope={barangayScope} forceBarangayView={Boolean(barangayScope)} /> : null}
-        {view === "endorsement" ? <ReliefEndorsement /> : null}
+        {view === "endorsement" ? <ReliefEndorsement barangayScope={barangayScope} /> : null}
       </div>
     </section>
   );

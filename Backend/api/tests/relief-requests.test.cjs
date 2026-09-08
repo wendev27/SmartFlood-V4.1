@@ -89,12 +89,21 @@ test('Barangay Tanong and Catmon queues are isolated by the authenticated assign
   rows.push({ id: 'catmon-request', user_id: 'resident-2', status: 'Pending', residents_v3: { resident_id: 'resident-2', barangay_id: 2, barangay_name: 'Barangay Catmon' } });
   const tanongRows = await service.listReliefRequests(officer, 'barangay');
   assert.deepEqual(tanongRows.map(r => r.id), ['request-1']);
+  assert.deepEqual((await service.listReliefRequests(officer, 'barangay', 2)).map(r => r.id), ['request-1']);
   const catmonOfficer = { ...officer, id: 'catmon-officer', barangay_id: 2, barangay: 'Barangay Catmon' };
   assert.deepEqual((await service.listReliefRequests(catmonOfficer, 'barangay')).map(r => r.id), ['catmon-request']);
   await assert.rejects(service.getReliefRequest('catmon-request', officer, 'barangay'), e => e.status === 403);
   await assert.rejects(service.endorseReliefRequest('catmon-request', officer), e => e.status === 403);
   await service.endorseReliefRequest('catmon-request', catmonOfficer);
   assert.equal(rows.find(r => r.id === 'catmon-request').status, 'Endorsed');
+});
+test('Super Admin selected Barangay scope isolates Tanong, Catmon and Potrero queues', async () => {
+  reset('Pending', 1);
+  rows.push({ id: 'catmon-request', user_id: 'resident-2', status: 'Pending', residents_v3: { resident_id: 'resident-2', barangay_id: 2, barangay_name: 'Barangay Catmon' } });
+  rows.push({ id: 'potrero-request', user_id: 'resident-3', status: 'Pending', residents_v3: { resident_id: 'resident-3', barangay_id: 3, barangay_name: 'Barangay Potrero' } });
+  assert.deepEqual((await service.listReliefRequests(officer, 'super', 1)).map(r => r.id), ['request-1']);
+  assert.deepEqual((await service.listReliefRequests(officer, 'super', 2)).map(r => r.id), ['catmon-request']);
+  assert.deepEqual((await service.listReliefRequests(officer, 'super', 3)).map(r => r.id), ['potrero-request']);
 });
 test('CSWDD retains city-wide access while Barangay users cannot endorse as another role', async () => {
   reset('Endorsed', 3);

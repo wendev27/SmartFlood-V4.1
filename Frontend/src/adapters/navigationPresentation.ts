@@ -36,7 +36,7 @@ export function navigationPresentation(items: NavItem[], role?: DashboardRole, l
     ],
   }));
   const groups = ([
-    { label: "CSWDD", icon: "cube", items: presented.filter((item) => reliefKeys.includes(item.key) && item.key !== "reliefDistribution") },
+    { label: "CSWDD", icon: "cube", items: presented.filter((item) => item.key === "relief" || item.key === "residents") },
     ...barangayGroups,
   ] satisfies NavigationGroup[]).filter((group) => group.items.length > 0);
   return {

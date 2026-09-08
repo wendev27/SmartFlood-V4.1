@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal/Modal";
 import { Pagination as SharedPagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
 import { cn } from "@/lib/cn";
+import { barangayIdForName } from "@/lib/barangayScope";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import {
   acceptEmergencyAllocationItem,
@@ -19,7 +20,7 @@ import styles from "./EmergencyNotificationsPanel.module.css";
 
 type ActionState = "idle" | "loading" | "accepting" | "rejecting" | "confirming" | "notifying";
 
-export function EmergencyNotificationsPanel({ openRequest, onOpenRequestHandled }: { openRequest?: { id: string; version: number } | null; onOpenRequestHandled?: (version: number) => void } = {}) {
+export function EmergencyNotificationsPanel({ barangayScope, openRequest, onOpenRequestHandled }: { barangayScope?: string; openRequest?: { id: string; version: number } | null; onOpenRequestHandled?: (version: number) => void } = {}) {
   const handledOpenRequest = useRef<number | null>(null);
   const pageSize = 5;
   const queryClient = useQueryClient();
@@ -28,9 +29,13 @@ export function EmergencyNotificationsPanel({ openRequest, onOpenRequestHandled 
   const [message, setMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const scopedBarangayId = barangayIdForName(barangayScope);
+  const notificationQueryKey = scopedBarangayId == null
+    ? queryKeys.notifications.emergency
+    : queryKeys.notifications.emergencyScoped(scopedBarangayId);
   const notificationsQuery = useQuery({
-    queryKey: queryKeys.notifications.emergency,
-    queryFn: getEmergencyNotifications,
+    queryKey: notificationQueryKey,
+    queryFn: () => getEmergencyNotifications(scopedBarangayId),
     staleTime: queryStaleTime.operational,
   });
   const notifications = notificationsQuery.data ?? [];
@@ -66,7 +71,7 @@ export function EmergencyNotificationsPanel({ openRequest, onOpenRequestHandled 
 
   const invalidateRelatedQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.emergency }),
+      queryClient.invalidateQueries({ queryKey: notificationQueryKey }),
       queryClient.invalidateQueries({ queryKey: queryKeys.relief.currentAllocation }),
       queryClient.invalidateQueries({ queryKey: queryKeys.relief.campaigns }),
     ]);
@@ -83,7 +88,7 @@ export function EmergencyNotificationsPanel({ openRequest, onOpenRequestHandled 
       const updated = await markEmergencyNotificationRead(notification.notification_id);
       if (updated) {
         mergeNotification({ ...notification, ...updated });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.emergency });
+        await queryClient.invalidateQueries({ queryKey: notificationQueryKey });
       }
     } catch (readError) {
       setActionError(readError instanceof Error ? readError.message : "Unable to mark notification as read.");
@@ -168,7 +173,7 @@ export function EmergencyNotificationsPanel({ openRequest, onOpenRequestHandled 
   }
 
   function mergeNotification(updated: EmergencyNotification) {
-    queryClient.setQueryData(queryKeys.notifications.emergency, (current: EmergencyNotification[] | undefined) => (current ?? []).map((notification) => (
+    queryClient.setQueryData(notificationQueryKey, (current: EmergencyNotification[] | undefined) => (current ?? []).map((notification) => (
       notification.notification_id === updated.notification_id
         ? {
           ...notification,

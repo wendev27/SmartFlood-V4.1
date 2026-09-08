@@ -3,14 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { getCurrentUser, normalizeUserRole } from "@/lib/authSession";
+import { barangayIdForName } from "@/lib/barangayScope";
 import { endorseResidentReliefRequest, getResidentReliefRequests, reviewResidentReliefRequest } from "@/services/reliefService";
 import type { ResidentReliefRequest } from "@/types/relief";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal/Modal";
 import styles from "./ReliefEndorsement.module.css";
 
-export function ReliefEndorsement() {
+export function ReliefEndorsement({ barangayScope }: { barangayScope?: string } = {}) {
   const role = normalizeUserRole(getCurrentUser());
+  const scopedBarangayId = barangayIdForName(barangayScope);
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<"all" | "family" | "individual">("all");
   const [status, setStatus] = useState("all");
@@ -18,13 +20,13 @@ export function ReliefEndorsement() {
   const [selected, setSelected] = useState<ResidentReliefRequest | null>(null);
   const [feedback, setFeedback] = useState("");
   const [mutationError, setMutationError] = useState("");
-  const query = useQuery({ queryKey: ["relief-requests"], queryFn: getResidentReliefRequests });
+  const query = useQuery({ queryKey: ["relief-requests", scopedBarangayId ?? "all"], queryFn: () => getResidentReliefRequests(scopedBarangayId) });
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selected) throw new Error("Select a request first.");
       if (role === "barangay") return endorseResidentReliefRequest(selected.id);
       if (!feedback.trim()) throw new Error("Feedback is required.");
-      return reviewResidentReliefRequest(selected.id, { action: "feedback", rejection_feedback: feedback.trim() });
+      return reviewResidentReliefRequest(selected.id, { action: "feedback", rejection_feedback: feedback.trim() }, scopedBarangayId);
     },
     onSuccess: async () => { setSelected(null); setMutationError(""); await queryClient.invalidateQueries({ queryKey: ["relief-requests"] }); },
     onError: (error) => setMutationError(error instanceof Error ? error.message : "Unable to update the request."),

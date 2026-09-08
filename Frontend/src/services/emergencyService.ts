@@ -13,8 +13,9 @@ import type {
   ReliefNotReceivedResponse,
 } from "@/types/emergency";
 
-export async function getEmergencyNotifications() {
-  const data = await fetchJson<EmergencyNotificationListResponse>("/api/emergency/notifications");
+export async function getEmergencyNotifications(barangayId?: number) {
+  const query = barangayId == null ? "" : `?barangay_id=${encodeURIComponent(String(barangayId))}`;
+  const data = await fetchJson<EmergencyNotificationListResponse>(`/api/emergency/notifications${query}`);
   return data.notifications;
 }
 

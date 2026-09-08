@@ -180,7 +180,7 @@ export default function DashboardPage() {
       </div>
       {presentationView === "weatherForecast" ? <WeatherForecastPanel onBack={() => setPresentationView(null)} /> : null}
       {presentationView === "notifications" ? <NotificationPanel role={session.role} onBack={() => setPresentationView(null)} onNavigate={navigateFromPresentation} onOpenAllocation={openAllocationNotification} /> : null}
-      {presentationView === "emergencyReports" ? <EmergencyReportPanel /> : null}
+      {presentationView === "emergencyReports" ? <EmergencyReportPanel barangayScope={adminView?.role === "barangay" ? adminView.label : undefined} /> : null}
     </AppShell>
   );
 }

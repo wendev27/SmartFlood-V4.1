@@ -28,6 +28,21 @@ export async function GET(request: NextRequest) {
       query = query.eq("target_barangay_id", barangay.barangay_id);
     } else if (role !== "super" && role !== "cswdd") {
       return NextResponse.json({ success: false, error: "You do not have access to emergency notifications." }, { status: 403 });
+    } else {
+      const requestedBarangayId = parseBarangayId(request.nextUrl.searchParams.get("barangay_id"));
+      if (requestedBarangayId.error) {
+        return NextResponse.json({ success: false, error: requestedBarangayId.error }, { status: 400 });
+      }
+      if (requestedBarangayId.value !== undefined) {
+        const { data: barangay, error: barangayError } = await supabaseServer
+          .from("barangays")
+          .select("barangay_id")
+          .eq("barangay_id", requestedBarangayId.value)
+          .maybeSingle();
+        if (barangayError) return NextResponse.json({ success: false, error: barangayError.message }, { status: 500 });
+        if (!barangay) return NextResponse.json({ success: false, error: "Selected barangay was not found." }, { status: 400 });
+        query = query.eq("target_barangay_id", requestedBarangayId.value);
+      }
     }
 
     const { data, error } = await query;
@@ -40,6 +55,12 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : "Unable to load emergency notifications." }, { status: 500 });
   }
+}
+
+function parseBarangayId(raw: string | null) {
+  if (raw == null || raw.trim() === "") return { value: undefined as number | undefined };
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? { value } : { error: "barangay_id must be a positive integer" };
 }
 
 async function attachAllocationDetails(notifications: Record<string, unknown>[]) {

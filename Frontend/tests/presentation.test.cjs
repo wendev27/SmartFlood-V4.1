@@ -58,11 +58,11 @@ test("navigation preserves role destinations and Barangay group structure", () =
     if (role === "cswdd") {
       assert.deepEqual(flattened.filter((item) => ["relief", "reliefManagement", "reliefDistribution"].includes(item.key)).map((item) => item.key), ["relief"]);
     }
-    assert.equal(flattened.some((item) => item.key === "reliefManagement"), role === "super");
+    assert.equal(flattened.some((item) => item.key === "reliefManagement"), false);
     const visibleKeys = role === "barangay" ? keys.filter((key) => key !== "reliefDistribution") : keys;
     if (role === "super") {
       assert.deepEqual(grouped.groups.map((group) => group.label), ["CSWDD", "Barangay Tanong", "Barangay Catmon", "Barangay Potrero"]);
-      assert.deepEqual(grouped.groups.find((group) => group.label === "CSWDD").items.map((item) => item.key), ["relief", "reliefManagement"]);
+      assert.deepEqual(grouped.groups.find((group) => group.label === "CSWDD").items.map((item) => item.key), ["relief", "residents"]);
       assert.equal(grouped.groups.filter((group) => group.label.startsWith("Barangay")).every((group) => group.items.map((item) => item.key).join("|") === "emergencyNotifications|reliefDistribution|residents|accounts"), true);
       assert.equal(grouped.groups.filter((group) => group.label.startsWith("Barangay")).every((group) => group.items.map((item) => item.label).join("|") === "Relief Management|Emergency Report Management|Resident Information|Resident Account Registration Management"), true);
     } else {

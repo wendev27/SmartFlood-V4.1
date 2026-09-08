@@ -1,5 +1,65 @@
 # Resident Relief Request Workflow — Implementation Handoff
 
+## RELIEF ALLOCATION NOTIFICATION CONTEXTUAL RBAC FIX — 2026-09-08
+
+- Root cause: `DashboardPage` passed the selected Barangay scope into `BarangayReliefPanel`, but the panel dropped it when rendering `EmergencyNotificationsPanel`. The service therefore called the global `/api/emergency/notifications` request, and the Super Admin contextual view received all notifications.
+- Frontend fix: `BarangayReliefPanel` now passes `barangayScope` to the allocation inbox. `EmergencyNotificationsPanel` resolves that existing context with `barangayIdForName()`, requests the optional `barangay_id`, and uses a scoped React Query key so Tanong/Catmon/Potrero results cannot be reused across contexts. The existing global notification key remains unchanged.
+- Backend fix: `GET /api/emergency/notifications` keeps authenticated Barangay users bound to `assignedBarangayForUser(viewer)`. For existing Super Admin/CSWDD admin views, an optional selected `barangay_id` is accepted only after validating it against the existing `barangays.barangay_id` table, then filters `notifications.target_barangay_id`. Missing scope preserves global admin visibility; malformed/nonexistent scopes are rejected.
+- Existing notification detail/action protections remain server-side. The list is the only detail source for View Allocation; read/accept/reject/receipt actions retain their existing item/notification Barangay checks. Emergency Report Management was not modified and was used only as an RBAC reference.
+- Files changed for this fix: `Frontend/src/components/relief/BarangayReliefPanel/BarangayReliefPanel.tsx`, `Frontend/src/components/emergency/EmergencyNotificationsPanel/EmergencyNotificationsPanel.tsx`, `Frontend/src/services/emergencyService.ts`, `Frontend/src/lib/queryKeys.ts`, `Backend/api/src/app/api/emergency/notifications/route.ts`, `Backend/api/tests/emergency-notifications.test.cjs`, and this document.
+- Database: existing `notifications.target_barangay_id`, `emergency_allocation_items.barangay_id`, and `barangays.barangay_id` relationships reused. No schema change, migration, or production data modification.
+- Validation: focused notification RBAC tests passed (4/4); relief tests passed (9/9); emergency tests passed (22/22); frontend presentation tests passed (19/19); backend/frontend TypeScript passed; backend/frontend production builds passed; `git diff --check` passed.
+
+## RELIEF ALLOCATION NOTIFICATION RBAC — VERIFIED 2026-09-08
+
+- Investigation traced `BarangayReliefPanel` -> `EmergencyNotificationsPanel` -> `getEmergencyNotifications()` -> `GET /api/emergency/notifications`.
+- The existing backend already enforces the required Barangay boundary with `getDashboardViewer()`, `dashboardViewerRole()`, `assignedBarangayForUser()`, and `notifications.target_barangay_id`. Barangay users receive only notifications for their authenticated assigned Barangay; CSWDD and Super retain existing global visibility.
+- Allocation details are attached server-side from `emergency_allocation_items` using notification source IDs. The frontend View Allocation modal does not perform a separate unscoped fetch.
+- Barangay read, accept, reject, and receipt-confirmation endpoints independently validate the authenticated assignment against `target_barangay_id` or `emergency_allocation_items.barangay_id`. Client-supplied role or Barangay scope is not trusted.
+- No production code change was necessary because the requested server-side filter and action checks are already present in the current tree. Emergency Report Management was inspected only as a reference and was not modified. Allocation generation, quantities, statuses, database schema, migrations, and production data were untouched.
+- Existing validation passed: focused relief tests 9/9, emergency RBAC tests 22/22, frontend presentation tests 19/19, backend/frontend TypeScript, backend/frontend production builds, and `git diff --check`.
+- Remaining limitation: no live authenticated database/browser session was available in this environment, so the reported multi-Barangay display could not be reproduced against production data. If it persists, capture the actual `GET /api/emergency/notifications` response and authenticated viewer role; the current source should return a server-filtered list.
+
+## RELIEF MANAGEMENT RBAC FIX — VERIFIED 2026-09-08
+
+- Root cause addressed in the current implementation: Barangay relief list scope is derived server-side from `assignedBarangayForUser(viewer)`, while CSWDD retains its existing all-barangay status-filtered queue. Client-supplied `barangay_id` cannot override the Barangay branch.
+- Reference implementation: Emergency Report Management uses `getDashboardViewer()`, `dashboardViewerRole()`, and `assignedBarangayForUser()`; Relief Management uses the same authenticated viewer/scope helpers without modifying Emergency Report Management.
+- Existing API and database relationship: `GET /api/relief-requests` queries `relief_requests` joined to `residents_v3` and filters `residents_v3.barangay_id` for Barangay users. No schema, migration, or production data change was made.
+- Detail security: `getReliefRequest()` applies `assertRequestScope()` so a Barangay user cannot read another Barangay request by ID. Endorsement calls the same scoped detail path and preserves `Pending -> Endorsed`.
+- CSWDD behavior: city-wide visibility remains limited to the existing Endorsed/Approved/Rejected workflow. Super Admin keeps the existing global convention.
+- Files changed for this verification: `Backend/api/tests/relief-requests.test.cjs` and this document. Emergency Report Management, Resident Information, authentication, AI, QR, notifications, allocation/distribution, and database files were intentionally untouched.
+- Validation: focused relief tests passed (9/9, including the client-supplied scope assertion); emergency tests passed (22/22); frontend presentation tests passed (19/19); backend/frontend TypeScript passed; backend/frontend production builds passed; `git diff --check` passed.
+
+## Super Admin CSWDD navigation correction — 2026-09-08
+
+- Changed `Frontend/src/adapters/navigationPresentation.ts` so the Super Admin CSWDD group contains the existing `relief` and `residents` navigation items only.
+- Old CSWDD structure: Relief Management (`relief`), Emergency Relief Management (`reliefManagement`), and the hidden/filtered emergency destination.
+- New CSWDD structure: Relief Management (`relief`) and Resident Information (`residents`).
+- Resident Information reuses the existing `#residents` dashboard route and `ResidentsPanel`; CSWDD does not use Barangay-specific scope or routing. CSWDD Relief Management continues to reuse `ReliefPanel`, including its Resident Relief Request Endorsement workflow.
+- Barangay navigation groups and their Relief Management, Emergency Report Management, Resident Information, and account modules were not changed.
+- Validation: frontend TypeScript, presentation tests, production build, and `git diff --check` are pending for this correction.
+
+## CSWDD Resident Information data-fetch correction — 2026-09-08
+
+- Root cause: the shared Super Admin sidebar handler tagged every navigation group as `{ role: "barangay", label: group.label }`. CSWDD Resident Information therefore passed `barangayScope="CSWDD"` into `ResidentsPanel`; the global API response was then removed by the frontend Barangay-name filter, producing zero residents and families.
+- Changed `Frontend/src/components/layout/Sidebar/Sidebar.tsx` so only groups whose labels start with `Barangay ` receive `AdminViewContext`. CSWDD navigation now passes no Barangay scope and uses the existing city-wide resident fetch.
+- Existing API reused: `/api/residents` and `/api/families`. Existing database tables reused: `residents_v3` and `families`, scoped by their existing `barangay_id` columns. No migration or data change was required.
+- Authorization remains server-side: Barangay requests use `assignedBarangayForUser(viewer)` regardless of client query parameters; CSWDD requests remain unfiltered across eligible records; Super/CDRRMO behavior follows the existing role branch.
+- Barangay Tanong/Catmon/Potrero navigation continues to pass its selected Barangay context and remains isolated. CSWDD uses the existing `ResidentsPanel` and `#residents` route without Barangay-specific filtering.
+- Files changed for this correction: `Frontend/src/components/layout/Sidebar/Sidebar.tsx` and this document. AI, QR, relief workflow, emergency allocation/distribution, notifications, authentication, database schema, and production data were intentionally untouched.
+- Validation: frontend/backend TypeScript passed; frontend/backend production builds passed; frontend presentation tests passed (19/19); relief tests passed (9/9); emergency tests passed (22/22); `git diff --check` passed.
+
+## Super Admin Barangay scope correction — 2026-09-08
+
+- Reused the existing Barangay navigation groups, `BarangayReliefPanel`, `ReliefEndorsement`, `barangayIdForName`, and emergency-report `barangay_id` request contract.
+- Super Admin group selection now persists when opening Emergency Report Management, so the existing `EmergencyReportPanel` receives the selected Barangay scope.
+- Relief endorsement receives the same selected scope and requests `/api/relief-requests?barangay_id=...`; Super Admin detail review requests carry the same scope.
+- Backend relief queries scope Super Admin selected views through the existing `relief_requests -> residents_v3.barangay_id` relationship. Barangay users still derive scope only from their authenticated assignment.
+- Emergency report backend scope remains server-enforced by `emergencyIncidentAuth` and `emergencyIncidentRepository`, which filter through `resident.barangay_id`; the selected query scope is required for Super Admin report views.
+- Files changed: `Frontend/src/app/dashboard/page.tsx`, `Frontend/src/components/layout/Sidebar/Sidebar.tsx`, `Frontend/src/components/relief/BarangayReliefPanel/BarangayReliefPanel.tsx`, `Frontend/src/components/relief/ReliefEndorsement/ReliefEndorsement.tsx`, `Frontend/src/services/reliefService.ts`, `Backend/api/src/lib/reliefRequests.ts`, `Backend/api/src/app/api/relief-requests/route.ts`, `Backend/api/src/app/api/relief-requests/[id]/review/route.ts`, `Backend/api/tests/relief-requests.test.cjs`, and this document.
+- No database/authentication architecture, migration, production data, CSWDD workflow, AI, QR, notification, allocation, or distribution logic was changed.
+- Validation is pending for this correction: run focused TypeScript/tests, production builds, and `git diff --check`; authenticated Tanong/Catmon/Potrero browser verification remains required.
+
 ## Barangay isolation hardening — 2026-09-08
 
 - Investigation found the existing list query already scopes Barangay users

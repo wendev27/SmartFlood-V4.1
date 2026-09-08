@@ -23,6 +23,7 @@ export const queryKeys = {
   },
   notifications: {
     emergency: ["emergency", "notifications"] as const,
+    emergencyScoped: (barangayId: number) => ["emergency", "notifications", barangayId] as const,
   },
   residents: {
     list: (barangayId?: number) => ["residents", barangayId ?? "all"] as const,

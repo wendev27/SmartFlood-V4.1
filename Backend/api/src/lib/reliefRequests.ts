@@ -48,7 +48,7 @@ export function isAllowedReadRole(role: ReturnType<typeof dashboardViewerRole>) 
   return role === "barangay" || role === "cswdd" || role === "super";
 }
 
-export async function listReliefRequests(viewer: DashboardViewer, role: ReturnType<typeof dashboardViewerRole>) {
+export async function listReliefRequests(viewer: DashboardViewer, role: ReturnType<typeof dashboardViewerRole>, requestedBarangayId?: number) {
   if (!isAllowedReadRole(role)) throw new ReliefRequestError("You do not have access to resident relief requests.", 403);
 
   let query = supabaseServer
@@ -62,6 +62,8 @@ export async function listReliefRequests(viewer: DashboardViewer, role: ReturnTy
     query = query.eq("residents_v3.barangay_id", scope.barangay_id);
   } else if (role === "cswdd") {
     query = query.in("status", ["Endorsed", "Approved", "Rejected"]);
+  } else if (requestedBarangayId !== undefined) {
+    query = query.eq("residents_v3.barangay_id", requestedBarangayId);
   }
 
   const { data, error } = await query;
@@ -69,13 +71,14 @@ export async function listReliefRequests(viewer: DashboardViewer, role: ReturnTy
   return (data ?? []).map(normalizeRequest);
 }
 
-export async function getReliefRequest(requestId: string, viewer: DashboardViewer, role: ReturnType<typeof dashboardViewerRole>) {
+export async function getReliefRequest(requestId: string, viewer: DashboardViewer, role: ReturnType<typeof dashboardViewerRole>, requestedBarangayId?: number) {
   if (!isAllowedReadRole(role)) throw new ReliefRequestError("You do not have access to resident relief requests.", 403);
-  const { data, error } = await supabaseServer
+  let query = supabaseServer
     .from("relief_requests")
     .select(requestSelect)
-    .eq("id", requestId)
-    .maybeSingle();
+    .eq("id", requestId);
+  if (requestedBarangayId !== undefined) query = query.eq("residents_v3.barangay_id", requestedBarangayId);
+  const { data, error } = await query.maybeSingle();
   if (error) throw new ReliefRequestError(error.message, 500);
   if (!data) throw new ReliefRequestError("Resident relief request was not found.", 404);
   const normalized = normalizeRequest(data);
@@ -107,13 +110,13 @@ export async function endorseReliefRequest(requestId: string, viewer: DashboardV
   return result;
 }
 
-export async function reviewReliefRequest(requestId: string, viewer: DashboardViewer, action: ReliefRequestAction, input: { rejection_feedback?: unknown }) {
+export async function reviewReliefRequest(requestId: string, viewer: DashboardViewer, action: ReliefRequestAction, input: { rejection_feedback?: unknown }, requestedBarangayId?: number) {
   const role = dashboardViewerRole(viewer);
   if (role !== "cswdd" && role !== "super") throw new ReliefRequestError("Only CSWDD users can review resident relief requests.", 403);
   if (action !== "feedback") throw new ReliefRequestError("action must be feedback.", 400);
   const feedback = typeof input.rejection_feedback === "string" ? input.rejection_feedback.trim() : "";
   if (!feedback) throw new ReliefRequestError("Feedback is required.", 400);
-  const current = await getReliefRequest(requestId, viewer, "cswdd");
+  const current = await getReliefRequest(requestId, viewer, "cswdd", requestedBarangayId);
   if (current.status !== "Endorsed") throw new ReliefRequestError(`Request status ${current.status} cannot be reviewed.`, 409);
   if (current.reviewed_at || current.reviewed_by || current.rejection_feedback) throw new ReliefRequestError("Feedback has already been provided for this request.", 409);
 

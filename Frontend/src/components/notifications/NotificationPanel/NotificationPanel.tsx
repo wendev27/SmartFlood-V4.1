@@ -24,7 +24,7 @@ export function NotificationPanel({ role, onBack, onNavigate, onOpenAllocation }
 }) {
   // Match the existing GET route; CDRRMO cannot read the barangay relief inbox.
   const canList = role === "barangay" || role === "cswdd" || role === "super";
-  const inboxQuery = useQuery({ queryKey: queryKeys.notifications.emergency, queryFn: getEmergencyNotifications, enabled: canList, staleTime: queryStaleTime.operational });
+  const inboxQuery = useQuery({ queryKey: queryKeys.notifications.emergency, queryFn: () => getEmergencyNotifications(), enabled: canList, staleTime: queryStaleTime.operational });
   const sensorsQuery = useQuery({ queryKey: queryKeys.sensors.latest, queryFn: getSensors, staleTime: queryStaleTime.realTime, refetchInterval: 5000 });
   const rows = useMemo(() => canList ? notificationPresentation(inboxQuery.data ?? []) : [], [canList, inboxQuery.data]);
   const [filter, setFilter] = useState<Filter>("All");

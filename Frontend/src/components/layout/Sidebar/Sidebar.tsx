@@ -74,7 +74,7 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
                   <svg className={styles.chevron} viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
                 </summary>
                 <div className={styles.accessItems}>
-                  {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => item.key === "reliefDistribution" && presentation ? presentation.open("emergencyReports") : onNavigate(item.key, { role: "barangay", label: group.label })} />)}
+                  {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => { const context = group.label.startsWith("Barangay ") ? { role: "barangay" as const, label: group.label } : undefined; if (item.key === "reliefDistribution" && presentation && context) { onNavigate("emergencyNotifications", context); presentation.open("emergencyReports"); } else onNavigate(item.key, context); }} />)}
                 </div>
               </details>
             ))}

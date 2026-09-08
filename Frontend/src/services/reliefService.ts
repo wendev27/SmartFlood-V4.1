@@ -60,16 +60,20 @@ export async function notifyBarangaysForEmergencyAllocation(batchId: string) {
   }) as Promise<BarangayNotificationResponse>;
 }
 
-export async function getResidentReliefRequests() {
-  return fetchJson<ResidentReliefRequest[]>("/api/relief-requests");
+function barangayScopeQuery(barangayId?: number) {
+  return barangayId == null ? "" : `?barangay_id=${encodeURIComponent(String(barangayId))}`;
+}
+
+export async function getResidentReliefRequests(barangayId?: number) {
+  return fetchJson<ResidentReliefRequest[]>(`/api/relief-requests${barangayScopeQuery(barangayId)}`);
 }
 
 export async function endorseResidentReliefRequest(id: string) {
   return fetchJson<ResidentReliefRequest>(`/api/relief-requests/${encodeURIComponent(id)}/endorse`, { method: "POST" });
 }
 
-export async function reviewResidentReliefRequest(id: string, payload: Record<string, unknown>) {
-  return fetchJson<{ result: ResidentReliefRequest }>(`/api/relief-requests/${encodeURIComponent(id)}/review`, {
+export async function reviewResidentReliefRequest(id: string, payload: Record<string, unknown>, barangayId?: number) {
+  return fetchJson<{ result: ResidentReliefRequest }>(`/api/relief-requests/${encodeURIComponent(id)}/review${barangayScopeQuery(barangayId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
