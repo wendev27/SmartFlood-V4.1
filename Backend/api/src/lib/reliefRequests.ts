@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import type { NextRequest } from "next/server";
 
 export type ReliefRequestStatus = "Pending" | "Endorsed" | "Approved" | "Rejected" | "Completed";
-export type ReliefRequestAction = "approve" | "reject";
+export type ReliefRequestAction = "feedback";
 
 export type ReliefRequest = {
   id: string;
@@ -85,6 +85,7 @@ export async function getReliefRequest(requestId: string, viewer: DashboardViewe
 }
 
 export async function endorseReliefRequest(requestId: string, viewer: DashboardViewer) {
+  if (dashboardViewerRole(viewer) !== "barangay") throw new ReliefRequestError("Only barangay users can endorse resident relief requests.", 403);
   const scope = assignedBarangayForUser(viewer);
   if (!scope) throw new ReliefRequestError("Your account is not assigned to a barangay.", 403);
   const current = await getReliefRequest(requestId, viewer, "barangay");
@@ -95,6 +96,7 @@ export async function endorseReliefRequest(requestId: string, viewer: DashboardV
     .from("relief_requests")
     .update({ status: "Endorsed", endorsed_by: viewer.id, endorsed_at: now, reviewed_by: null, reviewed_at: null, rejection_feedback: null, release_date: null, release_time: null, release_details: null })
     .eq("id", requestId)
+    .eq("user_id", current.user_id)
     .eq("status", "Pending")
     .select(requestSelect)
     .maybeSingle();
@@ -105,33 +107,27 @@ export async function endorseReliefRequest(requestId: string, viewer: DashboardV
   return result;
 }
 
-export async function reviewReliefRequest(requestId: string, viewer: DashboardViewer, action: ReliefRequestAction, input: { release_date?: unknown; release_time?: unknown; release_details?: unknown; rejection_feedback?: unknown }) {
-  if (dashboardViewerRole(viewer) !== "cswdd" && dashboardViewerRole(viewer) !== "super") throw new ReliefRequestError("Only CSWDD users can review resident relief requests.", 403);
+export async function reviewReliefRequest(requestId: string, viewer: DashboardViewer, action: ReliefRequestAction, input: { rejection_feedback?: unknown }) {
+  const role = dashboardViewerRole(viewer);
+  if (role !== "cswdd" && role !== "super") throw new ReliefRequestError("Only CSWDD users can review resident relief requests.", 403);
+  if (action !== "feedback") throw new ReliefRequestError("action must be feedback.", 400);
+  const feedback = typeof input.rejection_feedback === "string" ? input.rejection_feedback.trim() : "";
+  if (!feedback) throw new ReliefRequestError("Feedback is required.", 400);
   const current = await getReliefRequest(requestId, viewer, "cswdd");
   if (current.status !== "Endorsed") throw new ReliefRequestError(`Request status ${current.status} cannot be reviewed.`, 409);
+  if (current.reviewed_at || current.reviewed_by || current.rejection_feedback) throw new ReliefRequestError("Feedback has already been provided for this request.", 409);
 
-  const now = new Date().toISOString();
-  const payload: Record<string, unknown> = { status: action === "approve" ? "Approved" : "Rejected", reviewed_by: viewer.id, reviewed_at: now, rejection_feedback: null, release_date: null, release_time: null, release_details: null };
-  if (action === "approve") {
-    const releaseDate = String(input.release_date ?? "").trim();
-    const releaseTime = String(input.release_time ?? "").trim();
-    if (!releaseDate || !releaseTime) throw new ReliefRequestError("Release date and release time are required for approval.", 400);
-    payload.release_date = releaseDate;
-    payload.release_time = releaseTime;
-    const releaseDetails = String(input.release_details ?? "").trim();
-    if (releaseDetails) payload.release_details = releaseDetails;
-  } else {
-    const feedback = String(input.rejection_feedback ?? "").trim();
-    if (!feedback) throw new ReliefRequestError("Rejection feedback is required.", 400);
-    payload.rejection_feedback = feedback;
-  }
-
-  const { data, error } = await supabaseServer.from("relief_requests").update(payload).eq("id", requestId).eq("status", "Endorsed").select(requestSelect).maybeSingle();
+  // Reuse the existing feedback column without changing status or release metadata.
+  // Conditional predicates also prevent concurrent submissions from overwriting feedback.
+  const payload = { reviewed_by: viewer.id, reviewed_at: new Date().toISOString(), rejection_feedback: feedback };
+  const { data, error } = await supabaseServer.from("relief_requests").update(payload)
+    .eq("id", requestId).eq("status", "Endorsed")
+    .is("reviewed_at", null).is("reviewed_by", null).is("rejection_feedback", null)
+    .select(requestSelect).maybeSingle();
   if (error) throw new ReliefRequestError(error.message, 500);
-  if (!data) throw new ReliefRequestError("The request was already reviewed. Refresh and try again.", 409);
+  if (!data) throw new ReliefRequestError("The request was already changed. Refresh and try again.", 409);
   const result = normalizeRequest(data);
-  const role = dashboardViewerRole(viewer);
-  await logAuditEvent({ ...auditActorForViewer(viewer), action: action === "approve" ? "RELIEF_REQUEST_APPROVED" : "RELIEF_REQUEST_REJECTED", module: "Resident Relief Request Endorsement", description: action === "approve" ? `Approved resident relief request ${requestId} with release schedule ${String(payload.release_date)} ${String(payload.release_time)}.` : `Rejected resident relief request ${requestId}.`, target_type: "relief_request", target_id: requestId, barangay_id: result.resident?.barangay_id ?? null, barangay_name: result.resident?.barangay_name ?? null });
+  await logAuditEvent({ ...auditActorForViewer(viewer), action: "RELIEF_REQUEST_FEEDBACK_PROVIDED", module: "Resident Relief Request Endorsement", description: `Provided feedback for resident relief request ${requestId}.`, target_type: "relief_request", target_id: requestId, barangay_id: result.resident?.barangay_id ?? null, barangay_name: result.resident?.barangay_name ?? null });
   return { result, role };
 }
 

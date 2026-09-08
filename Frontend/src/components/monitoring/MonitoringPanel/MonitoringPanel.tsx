@@ -653,6 +653,9 @@ function AlertLevelManagement({ onBack, userProfile }: MonitoringSubpageProps) {
           ))}
         </div>
       </article>
+      <p className={styles.alertSource}>
+        According to PAGASA: <a href="https://www.pagasa.dost.gov.ph/" target="_blank" rel="noreferrer">https://www.pagasa.dost.gov.ph/</a>
+      </p>
     </section>
   );
 }

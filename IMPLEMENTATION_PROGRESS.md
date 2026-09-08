@@ -1,5 +1,121 @@
 # Resident Relief Request Workflow — Implementation Handoff
 
+## Barangay isolation hardening — 2026-09-08
+
+- Investigation found the existing list query already scopes Barangay users
+  through `residents_v3.barangay_id`, and detail/endorsement checks already
+  reject requests outside the authenticated assignment. The remaining
+  defense-in-depth gap was that the endorsement update itself matched only
+  request ID and `Pending` status.
+- Added the authenticated request `user_id` predicate to the endorsement
+  update and enforced the Barangay role inside the service, in addition to the
+  route guard. CSWDD list/detail/review behavior remains city-wide.
+- Expanded `Backend/api/tests/relief-requests.test.cjs` with Tanong/Catmon list
+  isolation, cross-Barangay detail/endorsement rejection, Catmon endorsement,
+  CSWDD multi-Barangay access, and non-Barangay endorsement rejection cases.
+- Exact files changed for this correction: `Backend/api/src/lib/reliefRequests.ts`,
+  `Backend/api/tests/relief-requests.test.cjs`, and this handoff document.
+- No migration was created or applied, no production data was changed, and no
+  frontend/UI changes were made for this security correction.
+- Focused relief tests pass (8/8), Backend TypeScript passes, Frontend
+  TypeScript passes, emergency regressions pass (22/22), frontend presentation
+  tests pass (19/19), frontend relief tests pass (3/3), both production builds
+  pass, and `git diff --check` passes.
+
+## CSWDD sidebar correction — 2026-09-08
+
+- Removed only `reliefManagement` from the existing `role === 'cswdd'` branch
+  of `navigationItemsForRole`. Welfare Admin/CSWDD retains Home, Flood Monitoring,
+  Relief Management, Resident Information, and CSWDD System Logs.
+- Emergency Relief Management still exists; its pages/routes and Super Admin
+  navigation remain unchanged. No new roles or authorization logic were added.
+- Updated existing presentation expectations. Frontend TypeScript passed
+  (`npx tsc --noEmit --incremental false`); presentation tests passed (19/19);
+  `git diff --check` passed.
+- Frontend production build attempted twice: compilation succeeded, but Next.js
+  failed with `Could not parse output from TypeScript's --showConfig.` Direct
+  `tsc --showConfig` produced valid JSON. Build remains unverified; tooling was
+  not changed for this navigation correction.
+- Restored build-generated next-env changes. No backend, database, migration,
+  authentication, module/page, or unrelated navigation changes in this follow-up.
+  Earlier authorized backend changes remain in the working tree unchanged.
+- Files changed in this follow-up: `Frontend/src/data/navigation.ts`,
+  `Frontend/tests/presentation.test.cjs`, and `IMPLEMENTATION_PROGRESS.md`.
+  No commit or push.
+- Sensor History navigation entries are now removed globally from the shared
+  and role-specific navigation definitions. The Sensor History route,
+  component, services, and sensor functionality remain intact. No backend,
+  database, or migration changes were made for this correction.
+- Validation: Frontend TypeScript passed, presentation tests passed (19/19),
+  production build passed, and `git diff --check` passed. Files changed for
+  this correction: `Frontend/src/data/navigation.ts`,
+  `Frontend/tests/presentation.test.cjs`, and this handoff document.
+- CSWDD navigation now retains only `relief` among its relief modules;
+  `Emergency Relief Management` and `Relief Audit Reports` remain implemented
+  but are hidden from the CSWDD sidebar. Barangay navigation and its separate
+  relief/report modules are unchanged. Sensor History remains globally hidden.
+- CSWDD correction validation: Frontend TypeScript passed, presentation tests
+  passed (19/19), production build passed, and `git diff --check` passed.
+- Super Admin CSWDD group now hides `Relief Audit Reports` while retaining
+  `Relief Management` and `Emergency Relief Management`; Barangay report
+  navigation and the underlying audit module remain unchanged.
+
+## Final corrections update — 2026-09-08
+
+This update supersedes the historical implementation details below.
+
+- Backend access authorized for the feedback correction.
+- Workflow: Pending → Barangay endorsement → Endorsed → CSWDD feedback.
+  Feedback preserves Endorsed status. The request detail displays saved feedback
+  and its timestamp. Approval/rejection and release inputs are removed.
+- Existing POST review route now accepts `action: "feedback"` and nonempty string
+  `rejection_feedback`. Old approve/reject actions return 400; the frontend caller
+  was updated together with the backend. Response envelope remains unchanged.
+- Existing authenticated dashboard viewer and CSWDD/Super role checks remain.
+  Reviewer identity is server-derived. Client identity/role/barangay fields cannot
+  override it. Existing Barangay scope and endorsement behavior remain unchanged.
+- Reuses `rejection_feedback`, `reviewed_by`, and `reviewed_at`. Conditional updates
+  require Endorsed and unset review fields, so duplicate/concurrent submissions
+  cannot overwrite saved feedback. Existing review data is read-only in this UI.
+- Feedback audit action is `RELIEF_REQUEST_FEEDBACK_PROVIDED`, with the trusted
+  actor, request ID, and request barangay. Existing audit logger is preserved.
+- No schema change needed, migration created/applied/rerun, or production data
+  changed. Existing migration is already applied per user; live schema was not
+  independently rechecked. Legacy columns/statuses remain intact.
+- Earlier UI corrections retained: CDRRMO Command Center sidebar/profile label;
+  Sensor History hidden across role navigation; Relief Audit Reports hidden;
+  Emergency Relief Management retained; PAGASA source restored from `efd6130`
+  using existing CSS and exact URL `https://www.pagasa.dost.gov.ph/`.
+- PASS: backend and frontend `npx tsc --noEmit --incremental false`.
+- PASS: backend and frontend `npm run build` (compiled successfully).
+- PASS: 6 backend feedback tests (`node tests/relief-requests.test.cjs`),
+  22 existing backend emergency tests (`npm run test:emergency`),
+  3 frontend feedback tests (`node tests/relief-feedback.test.cjs`), and both
+  existing frontend presentation/weather test files (`node --test
+  tests/presentation.test.cjs tests/weather.test.cjs`).
+- PASS: `git diff --check`. Complete tracked diff and new test files reviewed.
+  Generated next-env changes restored; existing multiple-lockfile build warning
+  remains. No dependency or lint tooling changes.
+- Verification limit: tests use in-memory database/session fixtures and rendered
+  components. Live PostgreSQL concurrency, authenticated browser/E2E workflows,
+  and production audit persistence were not exercised. Human acceptance testing
+  of the authenticated flow remains before claiming production readiness.
+- No QR, AI, authentication/session architecture, emergency allocation/distribution,
+  notifications, migration, mobile, or sensor-logic changes. No commit or push.
+
+Files changed across this task:
+
+- Backend/api/src/lib/reliefRequests.ts
+- Backend/api/src/app/api/relief-requests/[id]/review/route.ts
+- Backend/api/tests/relief-requests.test.cjs (new)
+- Frontend/src/components/relief/ReliefEndorsement/ReliefEndorsement.tsx
+- Frontend/src/components/layout/Sidebar/Sidebar.tsx
+- Frontend/src/components/monitoring/MonitoringPanel/MonitoringPanel.tsx
+- Frontend/src/data/navigation.ts
+- Frontend/tests/presentation.test.cjs
+- Frontend/tests/relief-feedback.test.cjs (new)
+- IMPLEMENTATION_PROGRESS.md
+
 ## 1. Feature purpose
 
 Mobile-created resident relief requests are reviewed by the assigned barangay,

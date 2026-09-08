@@ -28,6 +28,7 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const presentation = useDashboardPresentation();
   const profileSeal = profileSealForRole(userRole, userProfile.barangayName);
+  const visibleRoleLabel = userRole === "super" ? "CDRRMO Command Center" : userProfile.roleLabel;
   const reportItem: NavItem = { key: "reliefDistribution", label: "Emergency Report Management", icon: "document" };
 
   function logout() {
@@ -73,7 +74,7 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
                   <svg className={styles.chevron} viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
                 </summary>
                 <div className={styles.accessItems}>
-                  {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => onNavigate(item.key, { role: "barangay", label: group.label })} />)}
+                  {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => item.key === "reliefDistribution" && presentation ? presentation.open("emergencyReports") : onNavigate(item.key, { role: "barangay", label: group.label })} />)}
                 </div>
               </details>
             ))}
@@ -84,7 +85,7 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
             {profileSeal ? <img className={styles.profileSeal} src={profileSeal} alt="" /> : <span className={styles.profileAvatar}>{userProfile.initials}</span>}
             <span className={styles.profileName}>
               <strong title={userProfile.displayName}>{userProfile.displayName}</strong>
-              <small title={userProfile.roleLabel}>{userProfile.roleLabel}</small>
+              <small title={visibleRoleLabel}>{visibleRoleLabel}</small>
             </span>
           </button>
           <button type="button" onClick={logout} aria-label="Log out">
@@ -97,7 +98,7 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
           {isProfileOpen ? <div className={styles.profileDropdown} id="sidebar-profile-details">
             <strong>{userProfile.displayName}</strong>
             <p>{userProfile.email || "No email available"}</p>
-            <dl><div><dt>Role</dt><dd>{userProfile.roleLabel}</dd></div><div><dt>Access</dt><dd>{userProfile.logLabel}</dd></div></dl>
+            <dl><div><dt>Role</dt><dd>{visibleRoleLabel}</dd></div><div><dt>Access</dt><dd>{userProfile.logLabel}</dd></div></dl>
             <button className={styles.profileLogout} type="button" onClick={logout}>Logout</button>
           </div> : null}
         </div>

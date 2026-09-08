@@ -172,9 +172,7 @@ export default function DashboardPage() {
       {activePage === "monitoring" ? <MonitoringPanel resetSignal={monitoringResetVersion} onViewChange={setMonitoringView} userProfile={session.profile} /> : null}
       {activePage === "relief" ? <ReliefPanel onNavigate={navigateFromPresentation} /> : null}
       {activePage === "reliefManagement" ? <ReliefManagementPanel /> : null}
-      {activePage === "emergencyNotifications" ? session.role === "super" && adminView?.role === "barangay"
-        ? <EmergencyReportPanel barangayScope={adminView.label} />
-        : <BarangayReliefPanel barangayScope={adminView?.role === "barangay" ? adminView.label : session.profile.barangayName ?? undefined} notificationRequest={notificationRequest} onNotificationHandled={acknowledgeNotification} /> : null}
+      {activePage === "emergencyNotifications" ? <BarangayReliefPanel barangayScope={adminView?.role === "barangay" ? adminView.label : session.profile.barangayName ?? undefined} notificationRequest={notificationRequest} onNotificationHandled={acknowledgeNotification} /> : null}
       {activePage === "reliefDistribution" ? <ReliefDistributionPanel initialView={distributionView} barangayScope={adminView?.role === "barangay" ? adminView.label : undefined} forceBarangayView={Boolean(adminView?.role === "barangay")} onBack={() => navigateFromPresentation(session.role === "barangay" ? "emergencyNotifications" : "relief")} /> : null}
       {activePage === "sensors" ? <SensorsPanel /> : null}
       {activePage === "residents" ? <ResidentsPanel barangayScope={adminView?.role === "barangay" ? adminView.label : undefined} /> : null}

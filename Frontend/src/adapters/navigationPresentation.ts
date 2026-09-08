@@ -30,12 +30,13 @@ export function navigationPresentation(items: NavItem[], role?: DashboardRole, l
     label,
     icon: "users" as const,
     items: [
-      { key: "emergencyNotifications" as const, label: "Emergency Report Management", icon: "document" as const },
+      { key: "emergencyNotifications" as const, label: "Relief Management", icon: "cube" as const },
+      { key: "reliefDistribution" as const, label: "Emergency Report Management", icon: "document" as const },
       ...residentItems,
     ],
   }));
   const groups = ([
-    { label: "CSWDD", icon: "cube", items: presented.filter((item) => reliefKeys.includes(item.key)) },
+    { label: "CSWDD", icon: "cube", items: presented.filter((item) => reliefKeys.includes(item.key) && item.key !== "reliefDistribution") },
     ...barangayGroups,
   ] satisfies NavigationGroup[]).filter((group) => group.items.length > 0);
   return {
