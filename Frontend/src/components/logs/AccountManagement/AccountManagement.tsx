@@ -466,8 +466,7 @@ export function AccountManagement() {
           <>
             <header className={styles.modalHeader}>
               <div>
-                <h3 id="account-preview-title">Account Details</h3>
-                <p>Account details and access assignment</p>
+                <h3 id="account-preview-title">Admin Details</h3>
               </div>
               <div className={styles.headerActions}>
                 <button className={styles.editAdminButton} type="button" onClick={() => openEditForm(previewUser)} aria-label="Edit account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -476,34 +475,14 @@ export function AccountManagement() {
             </header>
             <dl className={styles.detailGrid}>
               <Detail label="Email" value={previewUser.email} />
-              <Detail label="Full Name" value={previewUser.full_name || "Unnamed account"} />
-              <Detail label="Mobile" value={previewUser.mobile_number} />
+              <Detail label="Password" value="••••••••••••••••••••" />
+              <Detail label="Name" value={previewUser.full_name || "Unnamed account"} />
               <Detail label="Role" value={previewUser.role_label} />
-              <Detail label="Department / Barangay" value={previewUser.department} />
-              <Detail label="Address" value={previewUser.address || "-"} />
-              <Detail label="Sex" value={previewUser.sex || "-"} />
-              <Detail label="Status" value={statusLabel(previewUser.status)} />
-              <Detail label="Created At" value={formatDateTime(previewUser.created_at, "Not available")} />
-              <Detail label="Updated At" value={formatDateTime(previewUser.updated_at, "Not available")} />
-              <Detail label="Last Login" value={formatDateTime(previewUser.last_login_at)} />
-              <Detail label="Failed Login Attempts" value={String(previewUser.failed_login_attempts)} />
-              <Detail label="Locked Until" value={formatDateTime(previewUser.locked_until, "Not locked")} />
+              <Detail label="Department" value={previewUser.department} />
+              <Detail label="Date Created" value={formatDateTime(previewUser.created_at, "Not available")} />
             </dl>
             <div className={styles.previewActions}>
               <Button size="sm" onClick={() => setPreviewUser(null)}>Back</Button>
-              <Button size="sm" onClick={() => setPasswordUser(previewUser)}><span className={`${styles.buttonIcon} ${styles.keyIcon}`} aria-hidden="true" />Change Password</Button>
-              {previewUser.status === "active" ? (
-                <Button size="sm" tone="muted" onClick={() => updateStatus(previewUser, "inactive")} disabled={isSubmitting}><span className={`${styles.buttonIcon} ${styles.powerIcon}`} aria-hidden="true" />Disable Account</Button>
-              ) : null}
-              {previewUser.status === "inactive" ? (
-                <Button size="sm" tone="success" onClick={() => updateStatus(previewUser, "active")} disabled={isSubmitting}><span className={`${styles.buttonIcon} ${styles.checkIcon}`} aria-hidden="true" />Enable Account</Button>
-              ) : null}
-              {previewUser.status !== "blocked" ? (
-                <Button size="sm" tone="danger" onClick={() => updateStatus(previewUser, "blocked")} disabled={isSubmitting}><span className={`${styles.buttonIcon} ${styles.shieldIcon}`} aria-hidden="true" />Block Account</Button>
-              ) : (
-                <Button size="sm" tone="success" onClick={() => updateStatus(previewUser, "active")} disabled={isSubmitting}><span className={`${styles.buttonIcon} ${styles.checkIcon}`} aria-hidden="true" />Unblock Account</Button>
-              )}
-              <Button size="sm" tone="purple" onClick={() => openEditForm(previewUser)}><span className={`${styles.buttonIcon} ${styles.pencilButtonIcon}`} aria-hidden="true" />Edit Account</Button>
             </div>
           </>
         ) : null}
