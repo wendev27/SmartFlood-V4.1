@@ -1,9 +1,11 @@
 import type { PageCopy, PageKey } from "@/types/navigation";
 
-export const pageCopy: Record<PageKey, PageCopy> = {
+type PageCopyKey = PageKey | "weatherForecast" | "notifications";
+
+export const pageCopy: Record<PageCopyKey, PageCopy> = {
   dashboard: {
     title: "Welcome back!",
-    subtitle: "Manage your barangay operations efficiently and effectively",
+    subtitle: "Manage your barangay operations efficiently and effectively.",
   },
   logs: {
     title: "Account Management",
@@ -14,7 +16,7 @@ export const pageCopy: Record<PageKey, PageCopy> = {
     subtitle: "Manage user accounts and view system audit logs",
   },
   monitoring: {
-    title: "Flood Monitoring Module",
+    title: "Flood Monitoring Management",
     subtitle: "Manage your barangay operations efficiently and effectively",
   },
   relief: {
@@ -43,6 +45,14 @@ export const pageCopy: Record<PageKey, PageCopy> = {
   },
   accounts: {
     title: "Resident Account Registration Management",
+    subtitle: "",
+  },
+  weatherForecast: {
+    title: "Weather Forecast",
+    subtitle: "Malabon City, Metro Manila",
+  },
+  notifications: {
+    title: "Notification",
     subtitle: "",
   },
 };

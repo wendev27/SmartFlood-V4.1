@@ -1,34 +1,46 @@
 .panel {
-  display: grid;
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0 auto;
+  min-height: calc(100vh - 112px);
+  padding: 65px 0 1px;
+  width: 100%;
+}
+
+.panel > h1 {
+  color: #1e1e1e;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  margin: 0 0 24px;
+}
+
+.logCard {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 1px 2px rgba(0, 0, 0, .1);
+  min-height: 315px;
+  overflow: hidden;
+  padding: 24px;
 }
 
 .toolbar {
   align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(280px, 2fr) repeat(3, minmax(145px, 1fr));
 }
 
 .search {
   align-items: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
+  border: 1px solid #d1d5dc;
+  border-radius: 10px;
   display: flex;
   height: 42px;
+  max-width: none;
   padding: 0 13px;
-}
-
-.toolbar select {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  color: #475569;
-  font-size: 12px;
-  height: 42px;
-  min-width: 0;
-  padding: 0 12px;
-  width: 100%;
 }
 
 .searchIcon {
@@ -53,57 +65,118 @@
   width: 7px;
 }
 
+.search input,
+.toolbar select {
+  background: #fff;
+  color: #364153;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+}
+
 .search input {
   border: 0;
-  color: #475569;
-  font-size: 12px;
   min-width: 0;
   outline: 0;
   width: 100%;
 }
 
+.toolbar select {
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  height: 42px;
+  min-width: 0;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.error {
+  background: #fef3f2;
+  border-radius: 8px;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 800;
+  margin: 16px 0 0;
+  padding: 10px 12px;
+}
+
 .tableWrap {
-  border-radius: 0 0 10px 10px;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
-  margin-inline: -22px;
+  margin: 24px 0 0;
   overflow-x: auto;
 }
 
 .table {
   border-collapse: collapse;
-  color: #475569;
-  min-width: 720px;
+  color: #4a5565;
+  min-width: 900px;
+  table-layout: fixed;
   width: 100%;
 }
 
-.table th {
-  background: #0f61ff;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  padding: 17px 28px;
-  position: sticky;
+.table th,
+.table td {
+  box-sizing: border-box;
+  padding-left: 18px;
+  padding-right: 18px;
   text-align: left;
-  text-transform: uppercase;
+}
+
+.table th {
+  background: #fff;
+  border-bottom: 1px solid #eef2f7;
+  color: #4a5565;
+  font-size: 14px;
+  font-weight: 700;
+  height: 44px;
+  line-height: 20px;
+  position: sticky;
+  text-transform: none;
   top: 0;
   z-index: 2;
 }
 
 .table td {
   border-bottom: 1px solid #eef2f7;
-  font-size: 12px;
+  color: #4a5565;
+  font-size: 14px;
+  font-weight: 400;
   height: 56px;
-  padding: 18px 28px;
-  text-align: left;
+  line-height: 20px;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
+.table th:nth-child(1),
+.table td:nth-child(1) { width: 14%; }
+
+.table th:nth-child(2),
+.table td:nth-child(2) { width: 21%; }
+
+.table th:nth-child(3),
+.table td:nth-child(3) { width: 17%; }
+
+.table th:nth-child(4),
+.table td:nth-child(4) { width: 30%; }
+
+.table th:nth-child(5),
+.table td:nth-child(5) { width: 11%; }
+
+.table th:nth-child(6),
+.table td:nth-child(6) { width: 7%; }
+
+.table th:first-child,
+.table td:first-child { padding-left: 0; }
+
+.table th:last-child,
+.table td:last-child { padding-right: 0; }
+
 .event {
-  color: #0f172a;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  color: #1e2939 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
 }
 
 .action {
@@ -113,7 +186,14 @@
   font-weight: 900;
   justify-content: center;
   min-width: 62px;
+  overflow: hidden;
   padding: 6px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewCell {
+  white-space: nowrap !important;
 }
 
 .badgeSuccess {
@@ -137,10 +217,12 @@
 }
 
 .previewButton {
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #0f61ff;
   border-radius: 6px;
   color: #0f61ff;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 10px;
   font-weight: 800;
   padding: 6px 10px;
@@ -150,26 +232,21 @@
   background: #eff6ff;
 }
 
-.error {
-  background: #fef3f2;
-  border-radius: 8px;
-  color: #b42318;
-  font-size: 12px;
-  font-weight: 800;
-  margin: 0;
-  padding: 10px 12px;
+.previewButton:focus-visible {
+  outline: 3px solid rgba(0, 136, 255, .35);
+  outline-offset: 2px;
 }
 
 .empty {
   color: #64748b;
   font-weight: 700;
-  text-align: center;
+  text-align: center !important;
 }
 
 .modalHeader {
   align-items: center;
   background: #0f61ff;
-  color: #ffffff;
+  color: #fff;
   display: flex;
   justify-content: space-between;
   padding: 20px 24px;
@@ -187,13 +264,14 @@
 .modalHeader p {
   font-size: 12px;
   margin-top: 4px;
-  opacity: 0.86;
+  opacity: .86;
 }
 
 .modalHeader button {
   background: transparent;
   border: 0;
-  color: #ffffff;
+  color: #fff;
+  cursor: pointer;
   font-size: 22px;
   font-weight: 800;
   line-height: 1;
@@ -220,7 +298,7 @@
   color: #64748b;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: .04em;
   text-transform: uppercase;
 }
 
@@ -249,187 +327,116 @@
   text-transform: uppercase;
 }
 
+/* Keep the log preview consistent with the Account Management detail modal. */
+.logDialog {
+  --modal-width: 800px;
+  border-radius: 10px;
+  box-shadow: 0 11px 15px -7px rgba(0, 0, 0, .2), 0 24px 38px 3px rgba(0, 0, 0, .14), 0 9px 46px 8px rgba(0, 0, 0, .12);
+  min-height: 660px;
+  width: min(var(--modal-width), calc(100dvw - 32px));
+}
+
+.logBackdrop {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, .45);
+}
+
+.logDialog .modalHeader {
+  background: #fff;
+  color: rgba(0, 0, 0, .9);
+  min-height: 64px;
+  padding: 16px 24px;
+}
+
+.logDialog .modalHeader h3 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: .15px;
+  line-height: 32px;
+}
+
+.logDialog .modalHeader p {
+  color: #64748b;
+  font-size: 14px;
+  opacity: 1;
+}
+
+.logDialog .modalHeader button {
+  color: rgba(0, 0, 0, .55);
+}
+
+.logDialog .detailGrid {
+  gap: 14px;
+  grid-template-columns: 1fr;
+  padding-bottom: 0;
+  padding-top: 30px;
+}
+
+.logDialog .detailGrid div {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  min-height: 46px;
+  padding: 9px;
+}
+
+.logDialog .detailGrid dt {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-bottom: 8px;
+  text-transform: none;
+}
+
+.logDialog .detailGrid dd {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0;
+}
+
+@media (max-width: 1120px) {
+  .panel .toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
   .panel {
-    gap: 18px;
+    min-height: calc(100vh - 80px);
+    padding-top: 32px;
+  }
+
+  .panel > h1 {
+    font-size: 30px;
+  }
+
+  .logCard {
+    padding: 18px;
+  }
+
+  .panel .toolbar {
+    grid-template-columns: 1fr;
   }
 
   .search {
-    max-width: none;
-  }
-
-  .tableWrap {
-    margin-inline: -16px;
-  }
-
-  .table th,
-  .table td {
-    padding-inline: 18px;
+    width: 100%;
   }
 
   .modalHeader,
   .modalBody {
-    padding-inline: 18px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .logDialog {
+    min-height: 0;
+    width: min(var(--modal-width), calc(100dvw - 28px));
   }
 
   .detailGrid {
     grid-template-columns: 1fr;
   }
 }
-
-@media (min-width: 900px) {
-  .toolbar {
-    grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.45fr) minmax(170px, 0.45fr);
-  }
-}
-
-/* Polished system logs layout */
-.panel{display:flex;flex-direction:column;gap:0;margin:0 auto;max-width:1040px;min-height:calc(100vh - 112px);padding:20px 0 1px;width:100%}.panel>h1{color:#1e1e1e;font-size:36px;font-weight:700;line-height:1.2;margin:0 0 24px}.logCard{background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.10);min-height:315px;overflow:hidden;padding:24px}.toolbar{display:block}.search{border:1px solid #d1d5dc;border-radius:10px;height:42px;max-width:395px;padding:0 13px}.search input{color:#1e1e1e;font-size:16px}.tableWrap{border-radius:0;box-shadow:none;margin:24px 0 0;overflow:hidden}.table{color:#1e1e1e;min-width:992px;table-layout:fixed}.table th{background:#fff;color:#4a5565;font-size:14px;font-weight:700;height:44px;letter-spacing:0;padding:0;text-transform:none}.table td{color:#4a5565;font-size:16px;font-weight:400;height:49px;padding:0}.table th:nth-child(1){width:140px}.table th:nth-child(2){width:220px}.table th:nth-child(3){width:160px}.table th:nth-child(4){width:320px}.event{color:#1e2939!important;font-size:14px!important;font-weight:400!important;letter-spacing:0}.panel>nav{margin-top:auto;padding:40px 55px 0}
-
-@media (min-width: 900px) {
-  .tableWrap {
-    margin-inline: calc(clamp(22px, 2vw, 36px) * -1);
-  }
-}
-
-/* Must remain after the legacy desktop rule. */
-.panel .tableWrap {
-  margin: 24px 0 0;
-}
-
-.emptyCard {
-  min-height: 630px;
-}
-
-/* Typography parity with the polished System Logs UI. */
-.panel,
-.panel button,
-.panel input,
-.panel table {
-  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
-  font-synthesis: none;
-}
-
-.panel > h1 {
-  color: #1e1e1e;
-  font-size: 36px;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.2;
-}
-
-.panel .search input {
-  color: #1e1e1e;
-  font-size: 16px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 24px;
-}
-
-.panel .table th {
-  color: #4a5565;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 20px;
-}
-
-.panel .table td {
-  color: #4a5565;
-  font-size: 16px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 24px;
-}
-
-.panel.panel { margin-left: 0; margin-right: 0; max-width: none; width: 100%; }
-
-.panel .table td:nth-child(1) {
-  color: #1e2939;
-  font-size: 14px !important;
-  font-weight: 400 !important;
-  line-height: 20px;
-}
-
-.panel .table td:nth-child(2) {
-  color: #364153;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.panel .table td:nth-child(5) {
-  color: #75777b;
-}
-
-.panel.panel { padding: 65px 0 1px; }
-
-.panel .table td {
-  max-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.panel .table { min-width: 900px; width: 100%; }
-.panel .table th:nth-child(1) { width: 14%; }
-.panel .table th:nth-child(2) { width: 22%; }
-.panel .table th:nth-child(3) { width: 17%; }
-.panel .table th:nth-child(4) { width: 31%; }
-.panel .table th:nth-child(5) { width: 16%; }
-
-.panel .table th,
-.panel .table td {
-  box-sizing: border-box;
-  padding-left: 18px;
-  padding-right: 18px;
-}
-
-.panel .table th:first-child,
-.panel .table td:first-child { padding-left: 0; }
-
-.panel .table th:last-child,
-.panel .table td:last-child { padding-right: 0; }
-
-.panel .table th:nth-child(1) { width: 14%; }
-.panel .table th:nth-child(2) { width: 21%; }
-.panel .table th:nth-child(3) { width: 17%; }
-.panel .table th:nth-child(4) { width: 30%; }
-.panel .table th:nth-child(5) { width: 18%; }
-
-.panel .toolbar {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(280px, 2fr) repeat(3, minmax(145px, 1fr));
-}
-
-.panel .search {
-  max-width: none;
-}
-
-.panel .toolbar select {
-  color: #364153;
-  font-size: 14px;
-}
-
-@media (max-width: 1120px) {
-  .panel.panel { max-width: 100%; }
-  .logCard { padding: 24px; }
-  .tableWrap { overflow-x: auto; }
-  .panel .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 720px) {
-  .panel.panel { padding-top: 32px; }
-  .panel > h1 { font-size: 30px; }
-  .logCard { padding: 18px; }
-  .search { max-width: none; width: 100%; }
-  .panel .toolbar { grid-template-columns: 1fr; }
-}
-
-.panel .tableWrap { overflow-x: auto; }
-.panel .toolbar { grid-template-columns: repeat(auto-fit,minmax(min(200px,100%),1fr)); }
-.panel .table { table-layout: auto; }
-.panel .table th:nth-child(n) { width: auto; }
-.panel .table td { max-width: none; overflow: visible; white-space: normal; }
-.panel .table td:last-child { white-space: nowrap; }
-.panel.panel { padding-top: 30px; }

@@ -12,7 +12,6 @@ import { DataTable } from '@/components/ui/DataTable/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { ReliefEndorsement } from '@/components/relief/ReliefEndorsement/ReliefEndorsement';
 import type { PageKey } from '@/types/navigation';
 import { Modal } from '@/components/ui/Modal/Modal';
 import {
@@ -122,7 +121,7 @@ export function ReliefPanel({
   onNavigate,
 }: { onNavigate?: (page: PageKey) => void } = {}) {
   const [view, setView] = useState<
-    'main' | 'recommendation' | 'history' | 'endorsement'
+    'main' | 'recommendation' | 'history'
   >('main');
   const pageSize = 5;
   const queryClient = useQueryClient();
@@ -873,22 +872,23 @@ export function ReliefPanel({
           </button>
         </nav>
       ) : (
-        <button
-          className={styles.backButton}
-          type="button"
-          onClick={() => setView('main')}
-        >
-          ← Back
-        </button>
+        <>
+          <button
+            className={styles.backButton}
+            type="button"
+            onClick={() => setView('main')}
+          >
+            ← Back
+          </button>
+          {view === 'recommendation' ? (
+            <h1 className={styles.recommendationPageTitle}>
+              AI-Optimized Relief Recommendation
+            </h1>
+          ) : null}
+        </>
       )}
-      {view === 'endorsement' ? (
-        <section className={styles.endorsementPage}>
-          <h1>Resident Relief Request Endorsement</h1>
-          <ReliefEndorsement />
-        </section>
-      ) : null}
       <section
-        hidden={view === 'main' || view === 'endorsement'}
+        hidden={view === 'main'}
         className={`${styles.stack} ${view === 'history' ? styles.historyMode : styles.recommendationMode}`}
         aria-label="AI relief recommendations"
       >

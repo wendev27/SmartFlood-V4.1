@@ -148,11 +148,24 @@
 }
 
 .addButton {
-  background: #0966ff;
-  border-radius: 8px;
+  background: linear-gradient(135deg, #0f61ff, #087cf5);
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(15, 97, 255, 0.18);
   color: #ffffff;
+  cursor: pointer;
   min-height: 40px;
   padding: 0 16px;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.addButton:hover {
+  box-shadow: 0 10px 20px rgba(15, 97, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.addButton:focus-visible {
+  outline: 3px solid rgba(0, 136, 255, 0.35);
+  outline-offset: 2px;
 }
 
 .wrap {
@@ -224,18 +237,33 @@
 }
 
 .editButton {
-  background: #eef6ff;
-  border-radius: 8px;
-  color: #0966ff;
-  gap: 3px;
-  min-height: 28px;
-  padding: 0 10px;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #0f61ff;
+  border-radius: 6px;
+  color: #0f61ff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 0;
+  padding: 6px 10px;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.editButton:hover {
+  background: #eff6ff;
+}
+
+.editButton:focus-visible {
+  outline: 3px solid rgba(0, 136, 255, 0.35);
+  outline-offset: 2px;
 }
 
 .editButton span {
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
-  transform: rotate(24deg);
 }
 
 .viewOnlyText {
@@ -906,3 +934,112 @@
 }
 
 .idCell { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Barangay resident form visual alignment: preserve the existing field geometry. */
+.residentDialog {
+  color: #1e293b;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+}
+
+.residentDialog .modalHeader h2 {
+  color: #1e1e1e;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.residentDialog .modalHeader p {
+  color: #64748b;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.residentDialog .formSection h3 {
+  color: #1e293b;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.residentDialog .formSection h3 span {
+  border-color: #0f61ff;
+  box-shadow: inset 0 0 0 3px #ffffff;
+  background: #dbeafe;
+}
+
+.residentDialog .formGrid label,
+.residentDialog .countGrid label {
+  color: #334155;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.residentDialog .requiredAsterisk {
+  color: #ff3830;
+}
+
+.residentDialog .formGrid input,
+.residentDialog .formGrid select,
+.residentDialog .countGrid input {
+  border-color: #cbd5e1;
+  color: #1e293b;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.residentDialog .formGrid input::placeholder,
+.residentDialog .countGrid input::placeholder,
+.residentDialog .modalSearchField input::placeholder {
+  color: #94a3b8;
+}
+
+.residentDialog .formGrid input:focus,
+.residentDialog .formGrid select:focus,
+.residentDialog .countGrid input:focus,
+.residentDialog .modalSearchField:focus-within {
+  border-color: #0f61ff;
+  box-shadow: 0 0 0 3px rgba(15, 97, 255, 0.12);
+}
+
+/* The checkbox and label must remain one horizontal control. */
+.residentDialog .formGrid .checkboxLabel {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 9px;
+  justify-content: flex-start;
+}
+
+.residentDialog .checkboxLabel input {
+  accent-color: #0f61ff;
+  flex: 0 0 16px;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.residentDialog .checkboxLabel span {
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.residentDialog .helperText {
+  color: #0f61ff;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.residentDialog .formActions button {
+  border-radius: 10px;
+  font-family: "Source Sans Pro", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+}

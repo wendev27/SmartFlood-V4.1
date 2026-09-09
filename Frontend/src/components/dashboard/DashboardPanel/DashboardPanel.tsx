@@ -115,7 +115,9 @@ export function DashboardPanel() {
             </article>)}
             {weather.isPending ? Array.from({ length: 8 }, (_, index) => <article key={index} aria-hidden="true"><span>…</span><span className={styles.forecastIconPlaceholder} /><strong>…</strong></article>) : null}
           </div>
-          <p className={styles.unavailable}>{weather.isPending ? "Loading Malabon City weather…" : weather.error ? "Weather could not refresh. Open details or retry below." : forecastRows.length ? `Source: ${weather.data?.sources.join(" / ")}. Times in Philippine time.` : "Forecast temporarily unavailable."}</p>
+          {weather.isPending ? <p className={styles.unavailable}>Loading Malabon City weather…</p> : null}
+          {weather.error ? <p className={styles.unavailable}>Weather could not refresh. Open details or retry below.</p> : null}
+          {!weather.isPending && !weather.error && !forecastRows.length ? <p className={styles.unavailable}>Forecast temporarily unavailable.</p> : null}
         </button>
         {weather.isError ? <div className={styles.weatherError} role="alert"><span>{weather.error.message}</span><button type="button" disabled={weather.isFetching} onClick={() => weather.refetch()}>Retry weather</button></div> : null}
       </section>

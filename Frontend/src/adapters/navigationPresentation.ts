@@ -24,7 +24,11 @@ export function navigationPresentation(items: NavItem[], role?: DashboardRole, l
   // A super user's existing routes can be grouped, but these groups never select
   // another identity or imply the reference's unsupported barangay impersonation.
   const reliefKeys: PageKey[] = ["relief", "reliefManagement", "emergencyNotifications", "reliefDistribution"];
-  const residentItems = presented.filter((item) => ["residents", "accounts"].includes(item.key));
+  const residentItems = presented
+    .filter((item) => ["residents", "accounts"].includes(item.key))
+    .map((item) => item.key === "residents"
+      ? { ...item, label: "Registry of Barangay Inhabitants (RBI)" }
+      : { ...item, label: "Resident Account Registration Management" });
   const barangayNames = ["Barangay Tanong", "Barangay Catmon", "Barangay Potrero"];
   const barangayGroups = barangayNames.map((label) => ({
     label,

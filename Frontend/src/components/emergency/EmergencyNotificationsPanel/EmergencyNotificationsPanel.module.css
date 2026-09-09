@@ -399,3 +399,22 @@
 
 .unavailableReports { border-top: 1px solid #dbe5f0; color: #64748b; margin-top: 36px; padding-top: 20px; }
 .unavailableReports > summary { color: #0088ff; cursor: pointer; font-size: 16px; font-weight: 600; }
+
+/* Keep the existing modal content/actions mounted, but match the compact reference view. */
+.allocationDialog .modalBody > .largeMetrics {
+  display: none;
+}
+
+.allocationDialog .modalActions {
+  justify-content: center;
+}
+
+.allocationDialog .modalActions .secondaryButton {
+  display: none;
+}
+
+.allocationDialog .modalActions .primaryButton {
+  flex: 0 1 500px;
+  margin: 0 auto;
+  width: 100%;
+}

@@ -162,6 +162,7 @@
   color: #303030;
   display: flex;
   font-size: 13px;
+  font-weight: 400;
   gap: 12px;
   min-height: 56px;
   padding: 8px 12px;

@@ -32,36 +32,36 @@ export function navigationItemsForRole(role: DashboardRole): NavItem[] {
 
   if (role === 'cswdd') {
     return [
-      { key: 'dashboard', label: 'Dashboard', icon: 'home' },
+      { key: 'dashboard', label: 'Home', icon: 'home' },
       { key: 'monitoring', label: 'Flood Monitoring Module', icon: 'droplet' },
       {
         key: 'relief',
-        label: 'AI-Optimized Relief Recommendation',
+        label: 'Relief Management',
         icon: 'cube',
       },
       { key: 'residents', label: 'Resident Information', icon: 'users' },
-      { key: 'systemLogs', label: logsLabel, icon: 'document' },
+      { key: 'systemLogs', label: 'CSWDD System Logs', icon: 'document' },
     ];
   }
 
   if (role === 'cdrrmo') {
     return [
-      { key: 'dashboard', label: 'Dashboard', icon: 'home' },
+      { key: 'dashboard', label: 'Home', icon: 'home' },
       { key: 'monitoring', label: 'Flood Monitoring Module', icon: 'droplet' },
-      { key: 'systemLogs', label: logsLabel, icon: 'document' },
+      { key: 'systemLogs', label: 'CDRRMO Command Center System Logs', icon: 'document' },
     ];
   }
 
   return [
-    { key: 'dashboard', label: 'Dashboard', icon: 'home' },
+    { key: 'dashboard', label: 'Home', icon: 'home' },
     { key: 'monitoring', label: 'Flood Monitoring Module', icon: 'droplet' },
     {
       key: 'emergencyNotifications',
-      label: 'Emergency Notifications',
+      label: 'Relief Management',
       icon: 'document',
     },
-    { key: 'reliefDistribution', label: 'Relief Distribution', icon: 'check' },
-    { key: 'residents', label: 'Resident Information', icon: 'users' },
+    { key: 'reliefDistribution', label: 'Emergency Report Management', icon: 'check' },
+    { key: 'residents', label: 'Registry of Barangay Inhabitants (RBI)', icon: 'users' },
     {
       key: 'accounts',
       label: 'Resident Account Registration Management',

@@ -12,6 +12,15 @@ import { navigationPresentation } from "@/adapters/navigationPresentation";
 import { clearStoredSession } from "@/lib/authSession";
 import styles from "./Sidebar.module.css";
 
+function sealForGroup(label: string): string | null {
+  const key = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (key === "cswdd") return "/images/cswdd/cswdd-seal.png";
+  if (key.includes("longos") || key.includes("catmon")) return "/images/dashboard/barangay-longos-seal.png";
+  if (key.includes("tanong")) return "/images/dashboard/barangay-tanong-seal.jpg";
+  if (key.includes("potrero")) return "/images/dashboard/barangay-potrero-seal.png";
+  return null;
+}
+
 interface SidebarProps {
   userRole?: DashboardRole;
   adminView?: AdminViewContext | null;
@@ -66,18 +75,21 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
             </Fragment>
           ))}
           {groups.length > 0 ? <div className={styles.accessGroups}>
-            {groups.map((group) => (
-              <details className={styles.accessGroup} key={group.label} open={adminView?.label === group.label || group.items.some((item) => item.key === activePage) || (presentation?.view === "emergencyReports" && group.items.some((item) => item.key === "residents")) || undefined}>
-                <summary>
-                  {group.label === "CSWDD" ? <img src="/images/cswdd/cswdd-seal.png" alt="" /> : <span className={styles.groupIcon} aria-hidden="true"><SidebarIcon item={{ key: group.items[0].key, label: group.label, icon: group.icon }} /></span>}
-                  <span>{group.label}</span>
-                  <svg className={styles.chevron} viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
-                </summary>
-                <div className={styles.accessItems}>
-                  {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => { const context = group.label.startsWith("Barangay ") ? { role: "barangay" as const, label: group.label } : undefined; if (item.key === "reliefDistribution" && presentation && context) { onNavigate("emergencyNotifications", context); presentation.open("emergencyReports"); } else onNavigate(item.key, context); }} />)}
-                </div>
-              </details>
-            ))}
+            {groups.map((group) => {
+              const groupSeal = sealForGroup(group.label);
+              return (
+                <details className={styles.accessGroup} key={group.label} open={adminView?.label === group.label || undefined}>
+                  <summary>
+                    {groupSeal ? <img src={groupSeal} alt="" /> : <span className={styles.groupIcon} aria-hidden="true"><SidebarIcon item={{ key: group.items[0].key, label: group.label, icon: group.icon }} /></span>}
+                    <span>{group.label}</span>
+                    <svg className={styles.chevron} viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
+                  </summary>
+                  <div className={styles.accessItems}>
+                    {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => { const context = group.label.startsWith("Barangay ") ? { role: "barangay" as const, label: group.label } : undefined; if (item.key === "reliefDistribution" && presentation && context) { onNavigate("emergencyNotifications", context); presentation.open("emergencyReports"); } else onNavigate(item.key, context); }} />)}
+                  </div>
+                </details>
+              );
+            })}
           </div> : null}
         </div>
         <div className={styles.profileCard} onMouseLeave={() => setIsProfileOpen(false)}>

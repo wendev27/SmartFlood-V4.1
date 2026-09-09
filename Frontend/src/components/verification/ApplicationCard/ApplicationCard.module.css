@@ -141,8 +141,3 @@
 
 /* Reviewed feedback stays compact and only uses the space its content needs. */
 .card .approvalNote{margin-top:10px;max-width:none;min-height:0;padding:8px 16px;width:100%}.card .approvalNote p{font-size:12px;line-height:16px;margin:0 0 3px}.card .approvalNote p:last-child{margin-bottom:0}
-
-.card .details { grid-template-columns: repeat(auto-fit,minmax(min(110px,100%),1fr)); }
-.card .meta { overflow-wrap: anywhere; }
-.card .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-@media(max-width:1050px) { .card.card { grid-template-columns: 52px minmax(0,1fr); } .card .actions { grid-column: 2; } }

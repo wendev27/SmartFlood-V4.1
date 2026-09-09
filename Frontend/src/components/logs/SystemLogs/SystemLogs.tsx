@@ -78,25 +78,25 @@ export function SystemLogs() {
     <section className={styles.panel} aria-label={title}>
       <h1>{title}</h1>
       <article className={styles.logCard}>
-      <div className={styles.toolbar}>
-        <label className={styles.search}>
-          <span className={styles.searchIcon} />
-          <input
-            type="search"
-            placeholder="Search logs by actor, action, module, or barangay..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} aria-label="Module">
-          <option value="">All Modules</option>
-          {moduleOptions.map((module) => <option key={module} value={module}>{module}</option>)}
-        </select>
-        <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} aria-label="Action">
-          <option value="">All Actions</option>
-          {actionOptions.map((action) => <option key={action} value={action}>{action}</option>)}
-        </select>
-      </div>
+        <div className={styles.toolbar}>
+          <label className={styles.search}>
+            <span className={styles.searchIcon} />
+            <input
+              type="search"
+              placeholder="Search logs by actor, action, module, or barangay..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} aria-label="Module">
+            <option value="">All Modules</option>
+            {moduleOptions.map((module) => <option key={module} value={module}>{module}</option>)}
+          </select>
+          <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} aria-label="Action">
+            <option value="">All Actions</option>
+            {actionOptions.map((action) => <option key={action} value={action}>{action}</option>)}
+          </select>
+        </div>
 
       {error ? <p className={styles.error}>{error}</p> : null}
       {logsQuery.isFetching && !logsQuery.isPending ? <p className={styles.error} role="status">Refreshing logs...</p> : null}
@@ -105,23 +105,27 @@ export function SystemLogs() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Actor</th>
-              <th>Role</th>
-              <th>Module</th>
+              <th>Event</th>
+              <th>Email</th>
+              <th>Department</th>
               <th>Action</th>
-              <th>Date/Time</th>
-              <th>Details</th>
+              <th>Timestamp</th>
+              <th>Preview</th>
             </tr>
           </thead>
           <tbody>
             {paginatedLogs.rows.map((log) => (
               <tr key={log.log_id ?? `${log.created_at}-${log.action}`}>
+                <td className={styles.event}>
+                  <span className={cn(styles.action, styles[getActionTone(log.action)])}>{log.action}</span>
+                </td>
                 <td>{formatBarangayName(log.actor_name || "-")}</td>
-                <td>{log.actor_role || "-"}</td>
-                <td>{log.module ?? "-"}</td>
-                <td><span className={cn(styles.action, styles[getActionTone(log.action)])}>{log.action}</span></td>
+                <td>{departmentForLog(log)}</td>
+                <td>{formatBarangayName(log.description || log.module || "-")}</td>
                 <td>{formatDateTime(log.created_at ?? "")}</td>
-                <td><button className={styles.previewButton} type="button" onClick={() => setPreviewLog(log)}>Preview</button></td>
+                <td className={styles.previewCell}>
+                  <button className={styles.previewButton} type="button" onClick={() => setPreviewLog(log)}>Preview</button>
+                </td>
               </tr>
             ))}
             {isLoading ? (
@@ -140,7 +144,7 @@ export function SystemLogs() {
       </article>
       <Pagination pagination={paginatedLogs.pagination} onPageChange={setPage} label="Audit logs" />
 
-      <Modal isOpen={Boolean(previewLog)} onClose={() => setPreviewLog(null)} labelledBy="log-preview-title" size="md">
+      <Modal isOpen={Boolean(previewLog)} onClose={() => setPreviewLog(null)} labelledBy="log-preview-title" className={styles.logDialog} backdropClassName={styles.logBackdrop} size="md">
         {previewLog ? (
           <>
             <header className={styles.modalHeader}>
@@ -231,6 +235,20 @@ function getActionTone(action: string) {
   ) return "badgeSuccess";
 
   return "badgeNeutral";
+}
+
+function departmentForLog(log: AuditLog) {
+  const explicitDepartment = String(log.department ?? "").trim();
+  if (explicitDepartment && !/^(system|sensor|authentication)$/i.test(explicitDepartment)) {
+    return formatBarangayName(explicitDepartment);
+  }
+  if (log.barangay_name) return formatBarangayName(log.barangay_name);
+
+  const source = `${log.actor_role ?? ""} ${log.module ?? ""}`;
+  if (/cswdd|city welfare/i.test(source)) return "CSWDD";
+  if (/barangay/i.test(source)) return "Barangay";
+  if (/cdrrmo|ndrrmo|command center|disaster/i.test(source)) return "CDRRMO";
+  return explicitDepartment ? formatBarangayName(explicitDepartment) : "System";
 }
 
 function unique(values: string[]) {

@@ -59,6 +59,17 @@
   width: 15px;
 }
 
+.search span::after {
+  background: #94a3b8;
+  content: "";
+  height: 2px;
+  position: absolute;
+  right: -5px;
+  top: 12px;
+  transform: rotate(45deg);
+  width: 6px;
+}
+
 .search input,
 .toolbar select {
   background: #ffffff;
@@ -162,11 +173,13 @@
 
 .tableScroll tbody td { height: 93px; }
 .tableScroll th { color: rgba(30, 30, 30, .55); font-weight: 700; line-height: 20px; }
-.tableScroll th:nth-child(1) { width: 30%; }
-.tableScroll th:nth-child(2) { width: 15%; }
-.tableScroll th:nth-child(3) { width: 15%; }
+.tableScroll th:nth-child(1) { width: 18%; }
+.tableScroll th:nth-child(2) { width: 18%; }
+.tableScroll th:nth-child(3) { width: 14%; }
 .tableScroll th:nth-child(4) { width: 18%; }
-.tableScroll th:nth-child(5) { width: 13%; }
+.tableScroll th:nth-child(5) { width: 14%; }
+.tableScroll th:nth-child(6) { width: 10%; }
+.tableScroll th:nth-child(7) { width: 8%; }
 
 .department { color: #1e1e1e; font-size: 12px; font-weight: 600; line-height: 16px; }
 .enabled, .disabled { font-size: 12px; font-weight: 600; line-height: 16px; }
@@ -225,29 +238,26 @@
 
 .actionPill {
   align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: #0088ff;
+  background: #ffffff;
+  border: 1px solid #0f61ff;
+  border-radius: 6px;
+  color: #0f61ff;
   cursor: pointer;
   display: inline-flex;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
   gap: 7px;
-  min-height: 22px;
-  padding: 0;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease;
+  min-height: 0;
+  padding: 6px 10px;
 }
 
-.actionPill:hover,
+.actionPill:hover {
+  background: #eff6ff;
+}
+
 .actionPill:focus-visible {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  outline: 0;
+  outline: 3px solid rgba(0, 136, 255, .35);
+  outline-offset: 2px;
 }
 
 .actionIcon,
@@ -740,7 +750,7 @@
 
 @media (min-width: 900px) {
   .toolbar {
-    grid-template-columns: 252px 190px 112px 112px 1fr 112px 112px;
+    grid-template-columns: 252px 190px 112px 112px 1fr 100px 100px;
   }
 
   .toolbar .exportButton { grid-column: 6; }
@@ -780,13 +790,61 @@
 }
 
 /* Existing fields and account actions remain available in the reference layout. */
-.card { height: auto; }
-.toolbar { grid-template-columns: repeat(auto-fit,minmax(min(160px,100%),1fr)); gap: 12px; }
-.toolbar .exportButton,.toolbar .addButton { grid-column: auto; width: 100%; }
+.toolbar .exportButton,.toolbar .addButton { width: 100%; }
 .tableScroll.tableScroll { overflow-x: auto; }
 .formGrid,.detailGrid { grid-template-columns: 1fr; }
 .accountForm label { font-size: 14px; gap: 8px; }
 .previewActions button { flex: 1 1 200px; width: auto; font-size: 14px; }
 .formActions button { border-radius: 10px; min-height: 44px; }
-.actionPill:focus-visible { outline: 3px solid rgba(0,136,255,.65); outline-offset: 3px; }
 @media(max-width:600px) { .formGrid,.detailGrid { grid-template-columns: 1fr; } }
+
+/* Admin details preview matches the stacked reference dialog. */
+.previewDialog .modalHeader {
+  min-height: 64px;
+  padding: 16px 24px;
+}
+
+.previewDialog .modalHeader p {
+  display: none;
+}
+
+.previewDialog .detailGrid {
+  gap: 14px;
+  grid-template-columns: 1fr;
+  padding-bottom: 0;
+  padding-top: 30px;
+}
+
+.previewDialog .detailGrid div {
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  min-height: 46px;
+  padding: 9px;
+}
+
+.previewDialog .detailGrid dt {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+
+.previewDialog .detailGrid dd {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.previewDialog .previewActions {
+  padding: 20px 24px 24px;
+}
+
+.previewDialog .previewActions button {
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  height: 50px;
+  min-height: 50px;
+  width: 100%;
+}

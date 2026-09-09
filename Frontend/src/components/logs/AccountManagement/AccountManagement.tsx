@@ -161,6 +161,27 @@ export function AccountManagement() {
     };
   }, [displayedUsers, page]);
 
+  function exportAccounts() {
+    const rows = [
+      ["Name", "Email", "Role", "Department", "Last Login", "Status"],
+      ...displayedUsers.map((user) => [
+        user.full_name || "Unnamed account",
+        user.email,
+        user.role_label,
+        formatBarangayName(user.department),
+        formatDateTime(user.last_login_at, "Not recorded"),
+        statusLabel(user.status),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "smartflood-account-management.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   useEffect(() => {
     setPage(1);
   }, [departmentFilter, roleFilter, search, statusFilter]);
@@ -353,23 +374,22 @@ export function AccountManagement() {
           <option value="inactive">Disabled</option>
           <option value="blocked">Blocked</option>
         </select>
-        <button type="button" className={styles.exportButton} onClick={() => {
-          setSearch("");
-          setDepartmentFilter("");
-          setRoleFilter("");
-          setStatusFilter("");
-          setPage(1);
-        }}>Reset</button>
-        <button type="button" className={styles.addButton} onClick={openAddForm}>+ Add Account</button>
+        <button type="button" className={styles.exportButton} onClick={exportAccounts}>
+          <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v12" />
+            <path d="m7 10 5 5 5-5" />
+            <path d="M5 21h14" />
+          </svg>
+          Export
+        </button>
+        <button type="button" className={styles.addButton} onClick={openAddForm}><span aria-hidden="true">＋</span>Add New</button>
       </div>
       {error ? <ErrorState title="Unable to Load Accounts" message={error} retryLabel="Retry" onRetry={refreshUsers} /> : null}
-      <DataTable className={styles.tableScroll} headers={["Name / Email", "Role", "Department / Barangay", "Last Login", "Status", "Actions"]} minWidth={880}>
+      <DataTable className={styles.tableScroll} headers={["Name", "Email", "Role", "Department / Barangay", "Last Login", "Status", "Actions"]} minWidth={980}>
         {paginatedUsers.rows.map((user, index) => (
           <tr key={user.id || `${user.email}-${index}`}>
-            <td>
-              <strong className={styles.userName}>{user.full_name || "Unnamed account"}</strong>
-              <a className={styles.emailLink} href={`mailto:${user.email}`}>{user.email}</a>
-            </td>
+            <td><strong className={styles.userName}>{user.full_name || "Unnamed account"}</strong></td>
+            <td><a className={styles.emailLink} href={`mailto:${user.email}`}>{user.email}</a></td>
             <td>{user.role_label}</td>
             <td><strong className={styles.department}>{formatBarangayName(user.department)}</strong></td>
             <td>{formatDateTime(user.last_login_at, "Not recorded")}</td>
@@ -377,7 +397,6 @@ export function AccountManagement() {
             <td>
               <div className={styles.rowActions}>
                 <button className={styles.actionPill} type="button" onClick={() => setPreviewUser(user)}>
-                  <span className={`${styles.actionIcon} ${styles.eyeIcon}`} aria-hidden="true" />
                   Preview
                 </button>
               </div>
@@ -386,12 +405,12 @@ export function AccountManagement() {
         ))}
         {isLoading ? (
           <tr>
-            <td colSpan={6}><LoadingState message="Loading account users..." /></td>
+            <td colSpan={7}><LoadingState message="Loading account users..." /></td>
           </tr>
         ) : null}
         {!isLoading && displayedUsers.length === 0 ? (
           <tr>
-            <td colSpan={6}>
+            <td colSpan={7}>
               <EmptyState
                 title={users.length === 0 ? "No accounts found" : "No accounts match your filters"}
                 description={users.length === 0 ? "System accounts will appear here once they are created." : "Try another name, email, role, department, or status filter."}
@@ -469,8 +488,7 @@ export function AccountManagement() {
                 <h3 id="account-preview-title">Admin Details</h3>
               </div>
               <div className={styles.headerActions}>
-                <button className={styles.editAdminButton} type="button" onClick={() => openEditForm(previewUser)} aria-label="Edit account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-                <button type="button" onClick={() => setPreviewUser(null)} aria-label="Close account preview">×</button>
+                <button className={styles.editAdminButton} type="button" onClick={() => openEditForm(previewUser)} aria-label="Edit admin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
               </div>
             </header>
             <dl className={styles.detailGrid}>

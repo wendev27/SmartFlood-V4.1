@@ -185,12 +185,14 @@ export function EmergencyNotificationsPanel({ barangayScope, openRequest, onOpen
     )));
   }
 
+  const inboxTitle = barangayScope ? `${barangayScope} Allocation Inbox` : "Barangay Allocation Inbox";
+
   return (
-    <section className={styles.stack} aria-label="Emergency relief notifications">
+    <section className={styles.stack} aria-label={`${inboxTitle} emergency relief notifications`}>
       <div className={styles.summary}>
         <div>
           <span>Emergency Relief</span>
-          <h3>Barangay Allocation Inbox</h3>
+          <h3>{inboxTitle}</h3>
           <p>Review allocation notices sent by CSWDD before distribution continues.</p>
         </div>
         <strong>Unread: {unreadCount}</strong>
@@ -203,7 +205,7 @@ export function EmergencyNotificationsPanel({ barangayScope, openRequest, onOpen
       {isInitialLoading ? (
         <div className={styles.emptyState}>Loading emergency notifications...</div>
       ) : notifications.length === 0 ? (
-        <div className={styles.emptyState}>No emergency relief notifications for your barangay yet.</div>
+        <div className={styles.emptyState}>{barangayScope ? `No emergency relief notifications for ${barangayScope} yet.` : "No emergency relief notifications for your barangay yet."}</div>
       ) : (
         <div className={styles.grid}>
           {paginatedNotifications.rows.map((notification) => (

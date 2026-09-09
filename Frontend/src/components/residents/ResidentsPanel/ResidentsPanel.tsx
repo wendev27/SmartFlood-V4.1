@@ -123,7 +123,9 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
   const queryClient = useQueryClient();
   const [currentUser] = useState(() => getCurrentUser());
   const canViewResidentInfo = canViewResidents(currentUser);
-  const canManageResidentRecords = canManageResidents(currentUser);
+  const isSuperAdmin = Number(currentUser?.role_id) === 1 || residentRoleText(currentUser).includes("super");
+  const canManageResidentRecords = !isSuperAdmin && canManageResidents(currentUser);
+  const showResidentActions = canManageResidentRecords;
   const isBarangayOfficial = isBarangayUser(currentUser);
   const assignedBarangay = assignedBarangayForUser(currentUser);
   const scopedBarangayId = barangayIdForName(barangayScope);
@@ -465,7 +467,7 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
                     <th>Address</th>
                     <th>Barangay</th>
                     <th>Contact</th>
-                    <th>Actions</th>
+                    {showResidentActions ? <th>Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -483,26 +485,26 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
                       <td>{formatBarangayName(resident.address)}</td>
                       <td>{formatBarangayName(resident.barangay)}</td>
                       <td>{resident.contact}</td>
-                      <td>
-                        {canManageResidentRecords && (!isBarangayOfficial || isSameBarangayForUser(currentUser, resident)) ? (
+                      {showResidentActions ? <td>
+                        {(!isBarangayOfficial || isSameBarangayForUser(currentUser, resident)) ? (
                           <button className={styles.editButton} type="button" onClick={() => openEditResident(resident)}>
-                            <span aria-hidden="true">/</span>
+                            <span aria-hidden="true">✎</span>
                             Edit
                           </button>
                         ) : (
                           <span className={styles.viewOnlyText}>View only</span>
                         )}
-                      </td>
+                      </td> : null}
                     </tr>
                   ))}
                   {isResidentsLoading ? (
                     <tr>
-                      <td colSpan={8}><LoadingState message="Loading residents..." /></td>
+                      <td colSpan={showResidentActions ? 8 : 7}><LoadingState message="Loading residents..." /></td>
                     </tr>
                   ) : null}
                   {!isResidentsLoading && displayedResidents.length === 0 ? (
                     <tr>
-                      <td colSpan={8}>
+                      <td colSpan={showResidentActions ? 8 : 7}>
                         <EmptyState
                           title={residents.length === 0 ? "No residents found" : "No residents match your search"}
                           description={residents.length === 0 ? "Resident records will appear here once they are created." : "Try another name, address, ID, age, sex, or contact number."}

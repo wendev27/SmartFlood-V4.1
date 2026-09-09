@@ -594,14 +594,14 @@ function AlertLevelManagement({ onBack, userProfile }: MonitoringSubpageProps) {
   const visibleActivity = useMemo(() => alertActivityPresentation(sensorsQuery.data ?? []), [sensorsQuery.data]);
 
   return (
-    <section className={styles.alertPage} aria-label="Alert level management">
+    <section className={styles.alertPage} aria-label="Alert level">
       <div className={styles.subpageHeader}>
         <div>
           <button className={styles.backButton} type="button" onClick={onBack}>
             <span aria-hidden="true">←</span>
             Back
           </button>
-          <h2>Alert Level Management</h2>
+          <h2>Alert Level</h2>
         </div>
         <DashboardHeaderActions userProfile={userProfile} />
       </div>
@@ -972,7 +972,7 @@ const monitoringModules: Array<{
   view?: "alertLevels" | "heatmap" | "history";
 }> = [
   {
-    label: "Alert Level Management",
+    label: "Alert Level",
     caption: "View descriptive graphs and narrative reports",
     icon: "alertLevel",
     view: "alertLevels",
