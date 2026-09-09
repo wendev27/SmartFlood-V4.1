@@ -137,9 +137,9 @@ test("approved and rejected applications keep their View action", () => {
 test("emergency landing presents real-data navigation without sample records or counts", () => {
   const html = render(EmergencyReportPanel);
   assert.match(html, /Emergency Report/);
-  assert.match(html, /Emergency History/);
+  assert.match(html, /Emergency Report History/);
   assert.doesNotMatch(html, /Emergency reporting is unavailable/);
-  assert.match(html, /Emergency History/);
+  assert.match(html, /Emergency Report History/);
   assert.doesNotMatch(html, /Sebastian|May 12|flood-house|Mark as|Showing \d/);
 });
 

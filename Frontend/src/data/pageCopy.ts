@@ -14,7 +14,7 @@ export const pageCopy: Record<PageKey, PageCopy> = {
     subtitle: "Manage user accounts and view system audit logs",
   },
   monitoring: {
-    title: "Flood Monitoring Management",
+    title: "Flood Monitoring Module",
     subtitle: "Manage your barangay operations efficiently and effectively",
   },
   relief: {

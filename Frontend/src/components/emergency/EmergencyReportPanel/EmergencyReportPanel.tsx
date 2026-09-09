@@ -72,16 +72,16 @@ export function EmergencyReportPresentation({
     <section aria-label="Resident emergency reports">
       <div className={styles.cards} aria-label="Emergency report management modules">
         <button type="button" onClick={() => onViewChange("reports")}><span><AlertIcon /></span><strong>Emergency Report</strong><p>View real-time emergency report from the residents</p></button>
-        <button type="button" onClick={() => onViewChange("history")}><span><HistoryIcon /></span><strong>Emergency History</strong><p>View tabulated emergency history records</p></button>
+        <button type="button" onClick={() => onViewChange("history")}><span><HistoryIcon /></span><strong>Emergency Report History</strong><p>View tabulated emergency report history records</p></button>
       </div>
       {state === "unavailable" ? <UnavailableNotice /> : null}
     </section>
   );
 
   return (
-    <section className={styles.page} aria-label={isHistory ? "Emergency history" : "Emergency reports"} aria-busy={state === "loading"}>
+    <section className={styles.page} aria-label={isHistory ? "Emergency report history" : "Emergency reports"} aria-busy={state === "loading"}>
       <button className={styles.back} type="button" onClick={() => onViewChange("main")}>← Back</button>
-      <h1>{isHistory ? "Emergency History" : "Emergency Report"}</h1>
+      <h1>{isHistory ? "Emergency Report History" : "Emergency Report"}</h1>
       {!isHistory ? <div className={styles.statusTabs} role="tablist" aria-label="Emergency report status">
         {(["Pending", "En Route", "Arrived"] as const).map((status) => <button
           key={status} type="button" role="tab" aria-selected={statusFilter === status}
@@ -105,7 +105,7 @@ export function EmergencyReportPresentation({
         {state === "error" ? <EmptyState title="Unable to load emergency reports" description={errorMessage ?? "Please try again."} actionLabel={onRetry ? "Try again" : undefined} onAction={onRetry} /> : null}
         {canRead && reports.length === 0 ? <EmptyState
           searchResult={Boolean(query)}
-          title={query ? "No emergency reports match your search" : `No emergency ${isHistory ? "history records" : "reports"} available`}
+          title={query ? "No emergency reports match your search" : `No emergency ${isHistory ? "report history records" : "reports"} available`}
           description={query ? "We couldn’t find any emergency reports matching your search." : "Emergency reports will appear here when they become available."}
         /> : null}
       </div>
@@ -165,7 +165,7 @@ export function EvidenceCarousel({ photos }: { photos: EmergencyReportViewModel[
 }
 
 function UnavailableNotice({ history = false }: { history?: boolean }) {
-  return <div className={styles.unavailableNotice} role="status"><strong>{history ? "Emergency history is unavailable" : "Emergency reporting is unavailable"}</strong><p>{history ? "Resolved reports and resident confirmations are not available yet." : "Resident reports, photos, and response status updates are not available yet."}</p></div>;
+  return <div className={styles.unavailableNotice} role="status"><strong>{history ? "Emergency report history is unavailable" : "Emergency reporting is unavailable"}</strong><p>{history ? "Resolved reports and resident confirmations are not available yet." : "Resident reports, photos, and response status updates are not available yet."}</p></div>;
 }
 
 const statusClass = (status: EmergencyReportStatus) => status.toLowerCase().replace(" ", "");

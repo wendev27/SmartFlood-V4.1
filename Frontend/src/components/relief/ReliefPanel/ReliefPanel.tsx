@@ -871,16 +871,6 @@ export function ReliefPanel({
             </span>
             <h2>Relief Distribution List</h2>
           </button>
-          <button
-            className={styles.moduleCard}
-            type="button"
-            onClick={() => setView('endorsement')}
-          >
-            <span className={styles.moduleIcon}>
-              <img src="/images/cswdd/request-endorsement.svg" alt="" />
-            </span>
-            <h2>Resident Relief Request Endorsement</h2>
-          </button>
         </nav>
       ) : (
         <button

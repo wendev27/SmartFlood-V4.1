@@ -1,5 +1,35 @@
 # Resident Relief Request Workflow — Implementation Handoff
 
+## Resident Relief Request Endorsement — FRONTEND HIDDEN — 2026-09-09
+
+- Intentionally removed the Resident Relief Request Endorsement entries from
+  the rendered CSWDD and Barangay Relief Management module grids.
+- The underlying frontend component/view and backend/API remain intact; no
+  database or migration changes were made.
+- AI-Optimized Relief Recommendation, Recommendation History, and Relief
+  Distribution List remain visible in the CSWDD Relief Management grid. The
+  other Barangay Relief Management entries remain visible.
+- Files changed: `Frontend/src/components/relief/ReliefPanel/ReliefPanel.tsx`,
+  `Frontend/src/components/relief/BarangayReliefPanel/BarangayReliefPanel.tsx`,
+  and this document.
+- Validation: frontend TypeScript passed; presentation tests passed (19/19);
+  frontend production build passed; `git diff --check` passed. The existing
+  `relief-feedback.test.cjs` remains unchanged and has one pre-existing
+  harness expectation mismatch because the component supplies its optional
+  `barangayScope` argument.
+
+## FRONTEND TERMINOLOGY AUDIT — 2026-09-08
+
+- Reference note: `SmartFlood Modules.docx` was not present inside `SmartFlood-V3.2`; the approved terminology specification supplied in the task was used as the source of truth.
+- MUST CHANGE: `Emergency History` -> `Emergency Report History` in `Frontend/src/components/emergency/EmergencyReportPanel/EmergencyReportPanel.tsx`.
+- MUST CHANGE: `Alert Level` -> `Alert Level Management` in `Frontend/src/components/monitoring/MonitoringPanel/MonitoringPanel.tsx`.
+- MUST CHANGE: `Flood Monitoring Management` -> `Flood Monitoring Module` in `Frontend/src/data/pageCopy.ts`.
+- MUST CHANGE: `Sensor history records` -> `Flood history records` in the web Flood History empty state in `Frontend/src/components/monitoring/MonitoringPanel/MonitoringPanel.tsx`; the mobile Sensor History terminology remains unchanged.
+- ALREADY CORRECT: visible `CDRRMO Command Center`, CSWDD group (`Relief Management`, `Resident Information`), Barangay groups, `Flood Heatmap`, `Flood History`, `System Logs`, `Relief Distribution List`, `Distribution History`, `Resident Relief Request Endorsement`, and the PAGASA/DOST URL.
+- DO NOT CHANGE: `Sensor History` wording where it represents the mobile concept; hidden web navigation entries for Sensor History, Relief Audit Reports, and Emergency Relief Management; role enum labels such as `Super Admin`; current CSWDD feedback-only workflow; and context-specific Relief Management wording.
+- Files changed for this audit: `Frontend/src/components/emergency/EmergencyReportPanel/EmergencyReportPanel.tsx`, `Frontend/src/components/monitoring/MonitoringPanel/MonitoringPanel.tsx`, `Frontend/src/data/pageCopy.ts`, and this document. No backend, API, auth, RBAC, database, service, or business logic changes were made.
+- Validation: frontend TypeScript passed; presentation tests passed (19/19); weather tests passed (6/6); frontend production build passed; `git diff --check` passed. The presentation expectation for the corrected `Emergency Report History` wording was updated.
+
 ## RELIEF ALLOCATION NOTIFICATION CONTEXTUAL RBAC FIX — 2026-09-08
 
 - Root cause: `DashboardPage` passed the selected Barangay scope into `BarangayReliefPanel`, but the panel dropped it when rendering `EmergencyNotificationsPanel`. The service therefore called the global `/api/emergency/notifications` request, and the Super Admin contextual view received all notifications.

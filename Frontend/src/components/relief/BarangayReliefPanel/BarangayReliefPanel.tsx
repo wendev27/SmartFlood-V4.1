@@ -12,7 +12,6 @@ const modules: Array<{ view: Exclude<BarangayReliefView, "main">; title: string;
   { view: "allocation", title: "Relief Allocation Notification", icon: "/images/dashboard/relief-allocation.svg" },
   { view: "distribution", title: "Relief Distribution", icon: "/images/dashboard/relief-distribution.svg" },
   { view: "history", title: "Relief Distribution History", icon: "/images/dashboard/relief-history.svg" },
-  { view: "endorsement", title: "Resident Relief Request Endorsement", icon: "/images/dashboard/relief-allocation.svg" },
 ];
 
 type Props = {

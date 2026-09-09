@@ -377,7 +377,7 @@ function FloodHistory({ onBack, userProfile }: MonitoringSubpageProps) {
                     <td colSpan={6}>
                       <EmptyState
                         title={history.length === 0 ? "No flood readings available yet" : "No flood history records found"}
-                        description={history.length === 0 ? "Sensor history records will appear here once data is available." : "Try changing the date range, filters, or search terms."}
+                        description={history.length === 0 ? "Flood history records will appear here once data is available." : "Try changing the date range, filters, or search terms."}
                       />
                     </td>
                   </tr>
@@ -601,7 +601,7 @@ function AlertLevelManagement({ onBack, userProfile }: MonitoringSubpageProps) {
             <span aria-hidden="true">←</span>
             Back
           </button>
-          <h2>Alert Level</h2>
+          <h2>Alert Level Management</h2>
         </div>
         <DashboardHeaderActions userProfile={userProfile} />
       </div>
@@ -972,7 +972,7 @@ const monitoringModules: Array<{
   view?: "alertLevels" | "heatmap" | "history";
 }> = [
   {
-    label: "Alert Level",
+    label: "Alert Level Management",
     caption: "View descriptive graphs and narrative reports",
     icon: "alertLevel",
     view: "alertLevels",
