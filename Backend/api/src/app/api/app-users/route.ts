@@ -2,10 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
 import { pickAppUserPayload, sanitizeAppUser } from "@/lib/appUserMapping";
+import { getDashboardViewer } from "@/lib/dashboardViewer";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-export async function GET() {
+const privateResponseHeaders = { "Cache-Control": "private, no-store", Vary: "Cookie" };
+
+async function requireSuperAdmin(req: NextRequest) {
+  const viewer = await getDashboardViewer(req);
+  if (!viewer) return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+  if (viewer.role_id !== 1) return NextResponse.json({ success: false, error: "Forbidden." }, { status: 403 });
+  return null;
+}
+
+export async function GET(req: NextRequest) {
   try {
+    const denied = await requireSuperAdmin(req);
+    if (denied) return denied;
+
     const { data, error } = await supabaseServer
       .from("app_users")
       .select("id,first_name,last_name,email,mobile_number,address,profile_image,created_at,updated_at,barangay,sex,role_id,barangay_id,status,failed_login_attempts,locked_until,last_login_at")
@@ -19,7 +32,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: (data ?? []).map((row: Record<string, unknown>) => sanitizeAppUser(row, barangayNames.get(Number(row.barangay_id)))),
-    });
+    }, { headers: privateResponseHeaders });
   } catch (error) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
@@ -27,6 +40,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const denied = await requireSuperAdmin(req);
+    if (denied) return denied;
+
     const body = await req.json();
     const validationError = validateCreateBody(body);
     if (validationError) {

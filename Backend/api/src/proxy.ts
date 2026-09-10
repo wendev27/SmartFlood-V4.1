@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:3000"];
 
 function allowedOrigins() {
-  const configured = process.env.CORS_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean);
+  const configured = process.env.CORS_ORIGINS?.split(",").map((origin) => origin.trim().replace(/\/+$/, "")).filter(Boolean);
   return configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS;
 }
 
@@ -12,10 +12,10 @@ function corsHeaders(origin: string | null) {
   if (origin && allowedOrigins().includes(origin)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Vary", "Origin");
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
-  headers.set("Access-Control-Allow-Credentials", "true");
-  headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   return headers;
 }
 
@@ -24,6 +24,9 @@ export function proxy(request: NextRequest) {
   const headers = corsHeaders(origin);
 
   if (request.method === "OPTIONS") {
+    if (origin && !allowedOrigins().includes(origin)) {
+      return new NextResponse(null, { status: 403 });
+    }
     return new NextResponse(null, { status: 204, headers });
   }
 

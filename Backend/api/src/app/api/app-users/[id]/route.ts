@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
+import { getDashboardViewer } from "@/lib/dashboardViewer";
 import { pickAppUserPayload, sanitizeAppUser } from "@/lib/appUserMapping";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -21,6 +22,10 @@ const allowedPatchFields = new Set([
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
+    const viewer = await getDashboardViewer(req);
+    if (!viewer) return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
+    if (viewer.role_id !== 1) return NextResponse.json({ success: false, error: "Forbidden." }, { status: 403 });
+
     const { id } = await context.params;
     const body = await req.json();
     const allowedBody = Object.fromEntries(

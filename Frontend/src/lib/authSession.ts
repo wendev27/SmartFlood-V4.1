@@ -42,12 +42,12 @@ const legacySessionKeys = [
 
 export function setStoredSession(user: StoredSessionUser) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(sessionKey, JSON.stringify({ user }));
+  window.sessionStorage.setItem(sessionKey, JSON.stringify({ user }));
 }
 
 export function getStoredSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(sessionKey) ?? window.sessionStorage.getItem(sessionKey);
+  const raw = window.sessionStorage.getItem(sessionKey);
   if (!raw) return null;
 
   try {
