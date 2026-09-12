@@ -5,25 +5,6 @@ from typing import Any
 from .ilp import apply_plan_allocations, build_optimization_plans
 from .payloads import to_int
 
-KNOWN_BARANGAYS = (
-    {"barangay_id": "1", "barangay_name": "Barangay Tanong"},
-    {"barangay_id": "2", "barangay_name": "Barangay Catmon"},
-    {"barangay_id": "3", "barangay_name": "Barangay Potrero"},
-)
-BARANGAY_ALIASES = {
-    "1": KNOWN_BARANGAYS[0],
-    "barangay 1": KNOWN_BARANGAYS[0],
-    "barangay tanong": KNOWN_BARANGAYS[0],
-    "tanong": KNOWN_BARANGAYS[0],
-    "2": KNOWN_BARANGAYS[1],
-    "barangay 2": KNOWN_BARANGAYS[1],
-    "barangay catmon": KNOWN_BARANGAYS[1],
-    "catmon": KNOWN_BARANGAYS[1],
-    "3": KNOWN_BARANGAYS[2],
-    "barangay 3": KNOWN_BARANGAYS[2],
-    "barangay potrero": KNOWN_BARANGAYS[2],
-    "potrero": KNOWN_BARANGAYS[2],
-}
 COUNT_FIELDS = (
     "pwd_count",
     "elderly_count",
@@ -59,10 +40,11 @@ def generate_recommendations(
     latest_readings: list[dict[str, Any]],
     families: list[dict[str, Any]],
     inventory: dict[str, int],
+    barangays: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    plans = generate_recommendation_plans(sensors, latest_readings, families, inventory)
+    plans = generate_recommendation_plans(sensors, latest_readings, families, inventory, barangays)
     balanced = next(plan for plan in plans if plan["plan_id"] == "balanced")
-    rows = apply_plan_allocations(_base_recommendation_rows(sensors, latest_readings, families), balanced)
+    rows = apply_plan_allocations(_base_recommendation_rows(sensors, latest_readings, families, barangays), balanced)
     for row in rows:
         row["plans"] = plans
         row["analysis_reason"] = _analysis_reason(row, row["has_sensor_reading"])
@@ -75,8 +57,9 @@ def generate_recommendation_plans(
     latest_readings: list[dict[str, Any]],
     families: list[dict[str, Any]],
     inventory: dict[str, int],
+    barangays: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    scored = _scored_barangays(sensors, latest_readings, families)
+    scored = _scored_barangays(sensors, latest_readings, families, barangays)
     plans = build_optimization_plans(scored, inventory)
     for plan in plans:
         for allocation in plan["allocations"]:
@@ -88,6 +71,7 @@ def _base_recommendation_rows(
     sensors: list[dict[str, Any]],
     latest_readings: list[dict[str, Any]],
     families: list[dict[str, Any]],
+    barangays: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     return [
         {
@@ -95,7 +79,7 @@ def _base_recommendation_rows(
             for name, value in item.items()
             if name != "key"
         }
-        for item in _scored_barangays(sensors, latest_readings, families)
+        for item in _scored_barangays(sensors, latest_readings, families, barangays)
     ]
 
 
@@ -103,11 +87,14 @@ def _scored_barangays(
     sensors: list[dict[str, Any]],
     latest_readings: list[dict[str, Any]],
     families: list[dict[str, Any]],
+    barangays: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    sensor_groups = _group_sensors(sensors, latest_readings)
-    family_groups = _group_families(families)
+    registry = _build_barangay_registry(barangays, sensors, families)
+    aliases = _build_barangay_aliases(registry)
+    sensor_groups = _group_sensors(sensors, latest_readings, aliases)
+    family_groups = _group_families(families, aliases)
     return sorted(
-        (_score_barangay(barangay, sensor_groups, family_groups) for barangay in KNOWN_BARANGAYS),
+        (_score_barangay(barangay, sensor_groups, family_groups) for barangay in registry),
         key=lambda item: item["priority_score"],
         reverse=True,
     )
@@ -146,11 +133,18 @@ def allocate_inventory(scored: list[dict[str, Any]], available: int, need_for: A
     return allocations
 
 
-def _group_sensors(sensors: list[dict[str, Any]], latest_readings: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _group_sensors(
+    sensors: list[dict[str, Any]],
+    latest_readings: list[dict[str, Any]],
+    aliases: dict[str, dict[str, str]],
+) -> dict[str, dict[str, Any]]:
     reading_map = {str(row.get("_id")): row.get("doc", row) for row in latest_readings}
     groups: dict[str, dict[str, Any]] = {}
     for sensor in sensors:
-        barangay = normalize_barangay(sensor.get("barangayName", sensor.get("barangay")))
+        barangay = normalize_barangay(
+            sensor.get("barangay_id", sensor.get("barangayId", sensor.get("barangayName", sensor.get("barangay")))),
+            aliases,
+        )
         if not barangay:
             continue
         key = barangay["barangay_id"]
@@ -163,10 +157,10 @@ def _group_sensors(sensors: list[dict[str, Any]], latest_readings: list[dict[str
     return groups
 
 
-def _group_families(families: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _group_families(families: list[dict[str, Any]], aliases: dict[str, dict[str, str]]) -> dict[str, dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     for family in families:
-        barangay = normalize_barangay(family.get("barangay_name", family.get("barangay_id")))
+        barangay = normalize_barangay(family.get("barangay_id", family.get("barangay_name")), aliases)
         if not barangay:
             continue
         key = barangay["barangay_id"]
@@ -235,8 +229,44 @@ def _analysis_reason(item: dict[str, Any], has_sensor_reading: bool) -> str:
     return f"{base} {allocation}"
 
 
-def normalize_barangay(value: Any) -> dict[str, str] | None:
-    return BARANGAY_ALIASES.get(str(value or "").strip().lower())
+def normalize_barangay(value: Any, aliases: dict[str, dict[str, str]] | None = None) -> dict[str, str] | None:
+    return (aliases or {}).get(str(value or "").strip().lower())
+
+
+def _build_barangay_registry(
+    barangays: list[dict[str, Any]] | None,
+    sensors: list[dict[str, Any]],
+    families: list[dict[str, Any]],
+) -> tuple[dict[str, str], ...]:
+    source = barangays if barangays is not None else _infer_barangays(sensors, families)
+    registry: dict[str, dict[str, str]] = {}
+    for row in source:
+        barangay_id = str(row.get("barangay_id", row.get("id", ""))).strip()
+        barangay_name = str(row.get("barangay_name", row.get("name", ""))).strip()
+        if barangay_id and barangay_name:
+            registry[barangay_id] = {"barangay_id": barangay_id, "barangay_name": barangay_name}
+    return tuple(registry.values())
+
+
+def _infer_barangays(sensors: list[dict[str, Any]], families: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    inferred: dict[str, dict[str, Any]] = {}
+    for row in [*families, *sensors]:
+        value = row.get("barangay_id", row.get("barangayId", row.get("barangay_name", row.get("barangayName", row.get("barangay")))))
+        key = str(value or "").strip()
+        if not key:
+            continue
+        inferred.setdefault(key, {"barangay_id": key, "barangay_name": str(value).strip()})
+    return list(inferred.values())
+
+
+def _build_barangay_aliases(registry: tuple[dict[str, str], ...]) -> dict[str, dict[str, str]]:
+    aliases: dict[str, dict[str, str]] = {}
+    for barangay in registry:
+        canonical = barangay["barangay_name"]
+        barangay_id = barangay["barangay_id"]
+        names = {barangay_id, canonical, canonical.removeprefix("Barangay ").strip()}
+        aliases.update({name.strip().lower(): barangay for name in names if name.strip()})
+    return aliases
 
 
 def _number(value: Any) -> int | float:

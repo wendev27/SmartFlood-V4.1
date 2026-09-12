@@ -112,7 +112,7 @@ export function profileForUser(user: StoredSessionUser, role: NormalizedRole): D
 }
 
 export function roleLabelForRole(role: NormalizedRole, user?: StoredSessionUser) {
-  if (role === "super") return "Super Admin";
+  if (role === "super") return user?.role_id === 2 ? "CDRRMO Command Center" : "Super Admin";
   if (role === "cdrrmo") return "CDRRMO Admin";
   if (role === "cswdd") return "CSWDD Admin";
   return user?.role_label || "Barangay Admin";

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { navigationItems } from "@/data/navigation";
 import { cn } from "@/lib/cn";
 import type { DashboardRole, NavItem, PageKey } from "@/types/navigation";
@@ -10,12 +11,14 @@ import { profileSealForRole } from "@/adapters/profilePresentation";
 import type { AdminViewContext, DashboardUserProfile } from "@/components/layout/AppShell/AppShell";
 import { navigationPresentation } from "@/adapters/navigationPresentation";
 import { clearStoredSession } from "@/lib/authSession";
+import { getBarangays } from "@/services/logsService";
+import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import styles from "./Sidebar.module.css";
 
 function sealForGroup(label: string): string | null {
   const key = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (key === "cswdd") return "/images/cswdd/cswdd-seal.png";
-  if (key.includes("longos") || key.includes("catmon")) return "/images/dashboard/barangay-longos-seal.png";
+  if (key.includes("longos")) return "/images/dashboard/barangay-longos-seal.png";
   if (key.includes("tanong")) return "/images/dashboard/barangay-tanong-seal.jpg";
   if (key.includes("potrero")) return "/images/dashboard/barangay-potrero-seal.png";
   return null;
@@ -33,10 +36,16 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activePage, adminView, isOpen, items = navigationItems, userProfile, userRole, onNavigate, onToggleMobileNav }: SidebarProps) {
-  const { primary, groups } = navigationPresentation(items, userRole, userProfile.logLabel);
+  const barangaysQuery = useQuery({
+    queryKey: queryKeys.accounts.barangays,
+    queryFn: getBarangays,
+    staleTime: queryStaleTime.reference,
+    enabled: userRole === "super" || userRole === "cdrrmo",
+  });
+  const { primary, groups } = navigationPresentation(items, userRole, userProfile.logLabel, barangaysQuery.data ?? []);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const presentation = useDashboardPresentation();
-  const profileSeal = profileSealForRole(userRole, userProfile.barangayName);
+  const profileSeal = profileSealForRole(userRole, userProfile.barangayName, userProfile.barangayId);
   const visibleRoleLabel = userRole === "super" ? "CDRRMO Command Center" : userProfile.roleLabel;
   const reportItem: NavItem = { key: "reliefDistribution", label: "Emergency Report Management", icon: "document" };
 
@@ -77,6 +86,9 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
           {groups.length > 0 ? <div className={styles.accessGroups}>
             {groups.map((group) => {
               const groupSeal = sealForGroup(group.label);
+              const groupIsActive = group.label === "CSWDD"
+                ? !adminView
+                : adminView?.label === group.label;
               return (
                 <details className={styles.accessGroup} key={group.label} open={adminView?.label === group.label || undefined}>
                   <summary>
@@ -85,7 +97,7 @@ export function Sidebar({ activePage, adminView, isOpen, items = navigationItems
                     <svg className={styles.chevron} viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg>
                   </summary>
                   <div className={styles.accessItems}>
-                    {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={!presentation?.view && adminView?.label === group.label && item.key === activePage} onClick={() => { const context = group.label.startsWith("Barangay ") ? { role: "barangay" as const, label: group.label } : undefined; if (item.key === "reliefDistribution" && presentation && context) { onNavigate("emergencyNotifications", context); presentation.open("emergencyReports"); } else onNavigate(item.key, context); }} />)}
+                    {group.items.map((item) => <NavActionItem key={item.key} item={item} isActive={groupIsActive && ((item.key === "reliefDistribution" && presentation?.view === "emergencyReports") || (!presentation?.view && item.key === activePage))} onClick={() => { const context = group.label.startsWith("Barangay ") ? { role: "barangay" as const, label: group.label } : undefined; if (item.key === "reliefDistribution" && presentation && context) { onNavigate("emergencyNotifications", context); presentation.open("emergencyReports"); } else onNavigate(item.key, context); }} />)}
                   </div>
                 </details>
               );

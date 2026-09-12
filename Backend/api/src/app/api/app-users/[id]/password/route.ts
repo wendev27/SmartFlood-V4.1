@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
-import { getDashboardViewer } from "@/lib/dashboardViewer";
+import { getDashboardViewer, isCommandCenterViewer } from "@/lib/dashboardViewer";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type RouteContext = {
@@ -12,14 +12,34 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const viewer = await getDashboardViewer(req);
     if (!viewer) return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
-    if (viewer.role_id !== 1) return NextResponse.json({ success: false, error: "Forbidden." }, { status: 403 });
+    if (!isCommandCenterViewer(viewer)) return NextResponse.json({ success: false, error: "Forbidden." }, { status: 403 });
 
     const { id } = await context.params;
     const body = await req.json();
+    const currentPassword = String(body.current_password ?? "");
     const newPassword = String(body.new_password ?? "").trim();
 
     if (!newPassword) {
       return NextResponse.json({ success: false, error: "New password is required." }, { status: 400 });
+    }
+    if (newPassword.length < 8) {
+      return NextResponse.json({ success: false, error: "New password must be at least 8 characters." }, { status: 400 });
+    }
+
+    const { data: account, error: accountError } = await supabaseServer
+      .from("app_users")
+      .select("id,password_hash")
+      .eq("id", id)
+      .single();
+    if (accountError || !account) return NextResponse.json({ success: false, error: "Account not found." }, { status: 404 });
+
+    // A supplied current password means this is a self-service-style change
+    // from the edit form. The existing command-center reset flow intentionally
+    // omits it so authorized administrators can reset an account password.
+    if (currentPassword) {
+      const matchesCurrent = await bcrypt.compare(currentPassword, String(account.password_hash ?? ""));
+      if (!matchesCurrent) return NextResponse.json({ success: false, error: "Current password is incorrect." }, { status: 400 });
+      if (currentPassword === newPassword) return NextResponse.json({ success: false, error: "New password must be different from the current password." }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);

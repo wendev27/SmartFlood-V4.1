@@ -22,7 +22,7 @@ export interface EmergencyReportViewModel {
   description: string | null;
   status: EmergencyReportStatus;
   photos: readonly { id: string; url: string; description: string }[];
-  residentConfirmation?: { message: string | null; confirmedAtLabel: string | null } | null;
+  residentConfirmation?: { message: string | null; confirmedAtLabel: string | null; rating?: number | null } | null;
 }
 
 export interface EmergencyReportPresentationProps {
@@ -133,7 +133,10 @@ export function EmergencyReportDetails({ report, onClose, onAdvance, isUpdating 
     <button className={styles.close} type="button" onClick={onClose} aria-label="Close emergency report">×</button>
     <header><span className={styles.avatar}><UserIcon /></span><div><h2 id="emergency-report-detail-title">{report.residentName ?? "Resident name unavailable"}</h2><p>{report.submittedAtLabel ?? "Submission time unavailable"}</p></div></header>
     <div className={styles.contact}><p><span className={styles.contactIcon}><PinIcon /></span><span>{report.location ?? "Location unavailable"}</span></p><p><span className={styles.contactIcon}><PhoneIcon /></span>{report.phone ?? "Phone number unavailable"}</p></div>
-    <div className={styles.message}>{report.description ? report.description.split(/\n\s*\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p>No additional notes provided.</p>}</div>
+    <section className={styles.reportMessageCard} aria-label="Emergency report description">
+      <div className={styles.feedbackHeader}><span className={styles.reportUrgencyIcon}>!</span><div><strong>Emergency Report</strong><small>Resident is requesting assistance</small></div></div>
+      <div className={styles.reportMessage}>{report.description ? report.description.split(/\n\s*\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p>No additional notes provided.</p>}</div>
+    </section>
     <EvidenceCarousel photos={report.photos} />
     {nextStatus ? <>
       <button className={styles.advance} data-status={report.status} type="button" disabled={!onAdvance || isUpdating} aria-describedby={!onAdvance ? "emergency-status-unavailable" : undefined} onClick={() => onAdvance?.(report, nextStatus)}>{isUpdating ? "Updating status…" : `Mark as ${nextStatus}`}</button>
@@ -141,7 +144,11 @@ export function EmergencyReportDetails({ report, onClose, onAdvance, isUpdating 
     </> : null}
     {updateError ? <p className={styles.updateError} role="alert">{updateError}</p> : null}
     {report.status === "Arrived" ? <p className={styles.awaitingResolution}>Awaiting the resident to confirm that this emergency has been resolved.</p> : null}
-    {report.status === "Resolved" ? report.residentConfirmation ? <blockquote>{report.residentConfirmation.message ? <p>{report.residentConfirmation.message}</p> : <p>The resident confirmed that the emergency has been resolved.</p>}{report.residentConfirmation.confirmedAtLabel ? <footer>{report.residentConfirmation.confirmedAtLabel}</footer> : null}</blockquote> : <p className={styles.capabilityNote}>Resident confirmation details are unavailable.</p> : null}
+    {report.status === "Resolved" ? report.residentConfirmation ? <section className={styles.feedbackCard} aria-label="Resident feedback">
+      <div className={styles.feedbackHeader}><span className={styles.feedbackIcon}>✓</span><div><strong>Resident Feedback</strong><small>Confirmation received</small></div></div>
+      <p>{report.residentConfirmation.message || "The resident confirmed that the emergency has been resolved."}</p>
+      <div className={styles.feedbackMeta}>{report.residentConfirmation.rating ? <span aria-label={`Rating ${report.residentConfirmation.rating} out of 5`}>{"★".repeat(report.residentConfirmation.rating)}<span className={styles.emptyStars}>{"★".repeat(5 - report.residentConfirmation.rating)}</span></span> : null}{report.residentConfirmation.confirmedAtLabel ? <small>{report.residentConfirmation.confirmedAtLabel}</small> : null}</div>
+    </section> : <section className={styles.feedbackCard + " " + styles.feedbackEmpty} aria-label="Resident feedback unavailable"><strong>Resident Feedback</strong><p>No feedback was recorded for this resolved report.</p></section> : null}
   </>;
 }
 

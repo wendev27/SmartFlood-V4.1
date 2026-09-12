@@ -102,3 +102,6 @@ a {
 }
 
 [hidden] { display: none !important; }
+
+/* Keep Next.js development controls out of the application shell. */
+[data-nextjs-dev-tools-button="true"] { display: none !important; }

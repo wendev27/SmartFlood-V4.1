@@ -14,7 +14,8 @@ export interface IncidentRepository {
   remove(paths: string[]): Promise<void>;
   download(path: string): Promise<Blob>;
 }
-const columns = "id,user_id,location,description,image_paths,status,created_at,updated_at,resident:residents_v3!inner(resident_id,barangay_id,first_name,middle_name,last_name,suffix,contact_number)";
+const legacyColumns = "id,user_id,location,description,image_paths,status,created_at,updated_at,resident:residents_v3!inner(resident_id,barangay_id,first_name,middle_name,last_name,suffix,contact_number)";
+const lifecycleColumns = "feedback,feedback_submitted_at";
 const storedStatus: Record<IncidentStatus, string> = { pending: "Pending", en_route: "En Route", arrived: "On Scene", resolved: "Resolved" };
 // Persist the existing database label; the UI continues to display Arrived.
 const apiStatus: Record<string, IncidentStatus> = {
@@ -34,15 +35,17 @@ export function mapIncident(row: any): EmergencyIncident {
     id: row.id, user_id: row.user_id, barangay_id: person.barangay_id,
     location: row.location, description: row.description, image_paths: row.image_paths,
     status: apiStatus[row.status], created_at: row.created_at, updated_at: row.updated_at,
-    // These fields do not exist in the supplied schema. Never infer confirmation from status.
-    en_route_at: null, arrived_at: null, resolved_at: null, resident_confirmed: null, feedback: null, rating: null,
+    en_route_at: row.en_route_at ?? null, arrived_at: row.arrived_at ?? null,
+    resolved_at: row.resolved_at ?? row.feedback_submitted_at ?? null,
+    resident_confirmed: row.resident_confirmed ?? (row.feedback ? true : null),
+    feedback: row.feedback ?? null, rating: row.rating ?? null,
     resident: { resident_id: person.resident_id,
       name: [person.first_name, person.middle_name, person.last_name, person.suffix].filter(Boolean).join(" "),
       phone: person.contact_number ?? null },
   };
 }
 export function createIncidentRepository(client: typeof supabaseServer): IncidentRepository {
-  const scoped = (actor: IncidentActor) => scope(client.from("emergency_reports").select(columns)
+  const scoped = (actor: IncidentActor) => scope(client.from("emergency_reports").select(legacyColumns)
     .in("status", Object.keys(apiStatus)), actor);
   return {
     async resident(id) {
@@ -51,12 +54,28 @@ export function createIncidentRepository(client: typeof supabaseServer): Inciden
     },
     async insert(row) {
       const { barangay_id: _derivedBarangay, ...submission } = row;
-      const { data, error } = await client.from("emergency_reports").insert({ ...submission, status: "Pending" }).select(columns).single();
+      const { data, error } = await client.from("emergency_reports").insert({ ...submission, status: "Pending" }).select(legacyColumns).single();
       failure(error); return mapIncident(data);
     },
     async get(id, actor) {
       const { data, error } = await scoped(actor).eq("id", id).maybeSingle();
-      failure(error); return data ? mapIncident(data) : null;
+      failure(error);
+      if (!data) return null;
+
+      // Feedback is optional across deployments. Keep the primary report read
+      // compatible with the legacy schema, then enrich only the authorized
+      // detail record when lifecycle columns are available.
+      try {
+        const lifecycle = await client.from("emergency_reports")
+          .select(lifecycleColumns)
+          .eq("id", id)
+          .maybeSingle();
+        if (!lifecycle.error && lifecycle.data) Object.assign(data, lifecycle.data);
+      } catch {
+        // Older schemas do not have lifecycle feedback columns.
+      }
+
+      return mapIncident(data);
     },
     async update(id, actor, expected, change) {
       if (change.status === "resolved" || change.feedback !== undefined || change.resident_confirmed !== undefined || change.rating !== undefined) {
@@ -69,7 +88,7 @@ export function createIncidentRepository(client: typeof supabaseServer): Inciden
       const { data, error } = await client.from("emergency_reports")
         .update({ status: storedStatus[change.status!], updated_at: new Date().toISOString() })
         .eq("id", id).eq("user_id", current.user_id).eq("status", storedStatus[expected])
-        .select(columns).maybeSingle();
+        .select(legacyColumns).maybeSingle();
       failure(error); return data ? mapIncident(data) : null;
     },
     async list(actor, query) {

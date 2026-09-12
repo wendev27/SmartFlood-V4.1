@@ -41,8 +41,8 @@ export function normalizeLogRole(viewer: LogViewer | null | undefined): LogRole 
   const roleId = viewer.role_id == null ? "" : String(viewer.role_id);
   const roleText = normalizeText(`${viewer.role ?? ""} ${viewer.role_name ?? ""} ${viewer.role_label ?? ""}`);
 
-  if (roleId === "1" || roleText.includes("super")) return "super";
-  if (roleId === "2" || /(cdrrmo|ndrrmo)/.test(roleText)) return "cdrrmo";
+  if (roleId === "1" || roleId === "2" || roleText.includes("super")) return "super";
+  if (/(cdrrmo|ndrrmo)/.test(roleText)) return "super";
   if (roleId === "3" || /(cswdd|city welfare|welfare)/.test(roleText)) return "cswdd";
   if (roleId === "4" || roleText.includes("barangay")) return "barangay";
   return null;

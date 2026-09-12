@@ -15,7 +15,7 @@ import { withAuditActor } from "@/lib/auditClient";
 import { formatBarangayName, normalizeBarangayForCompare } from "@/lib/formatters";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import { fetchJson } from "@/services/apiClient";
-import { getAccountUsers } from "@/services/logsService";
+import { getAccountUsers, getBarangays } from "@/services/logsService";
 import styles from "./AccountManagement.module.css";
 
 type AccountStatus = "active" | "inactive" | "blocked";
@@ -51,6 +51,8 @@ type AccountFormState = {
   mobile_number: string;
   password: string;
   confirm_password: string;
+  new_password: string;
+  confirm_new_password: string;
   address: string;
   sex: string;
   role_id: string;
@@ -65,6 +67,8 @@ const emptyForm: AccountFormState = {
   mobile_number: "",
   password: "",
   confirm_password: "",
+  new_password: "",
+  confirm_new_password: "",
   address: "",
   sex: "",
   role_id: "",
@@ -77,12 +81,6 @@ const roleOptions = [
   "NDRRMO Officer",
   "City Welfare",
   "Barangay Official",
-];
-
-const barangayOptions = [
-  { id: "1", label: "Barangay Tanong" },
-  { id: "2", label: "Barangay Catmon" },
-  { id: "3", label: "Barangay Potrero" },
 ];
 
 export function AccountManagement() {
@@ -103,6 +101,8 @@ export function AccountManagement() {
   const [passwordUser, setPasswordUser] = useState<AccountUserRow | null>(null);
   const [deleteUser, setDeleteUser] = useState<AccountUserRow | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [resultModal, setResultModal] = useState({
     open: false,
     type: "success" as ActionResultType,
@@ -114,6 +114,11 @@ export function AccountManagement() {
     queryKey: queryKeys.accounts.users,
     queryFn: getAccountUsers,
     staleTime: queryStaleTime.admin,
+  });
+  const barangaysQuery = useQuery({
+    queryKey: queryKeys.accounts.barangays,
+    queryFn: getBarangays,
+    staleTime: queryStaleTime.reference,
   });
   const users = useMemo(() => (usersQuery.data ?? []).map(mapAccountUser), [usersQuery.data]);
   const isLoading = usersQuery.isPending;
@@ -130,6 +135,17 @@ export function AccountManagement() {
     users.forEach((user) => labels.add(user.role_label || "Unassigned"));
     return Array.from(labels).sort((a, b) => roleSortValue(a) - roleSortValue(b) || a.localeCompare(b));
   }, [users]);
+  const barangayOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const barangay of barangaysQuery.data ?? []) {
+      options.set(String(barangay.barangay_id), barangay.barangay_name);
+    }
+    if (selectedUser?.barangay_id != null && selectedUser.barangay_name) {
+      options.set(String(selectedUser.barangay_id), selectedUser.barangay_name);
+    }
+    return Array.from(options, ([id, label]) => ({ id, label }))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [barangaysQuery.data, selectedUser]);
 
   const displayedUsers = useMemo(() => users.filter((user) => {
     const normalizedSearch = normalizeBarangayForCompare(search);
@@ -209,6 +225,8 @@ export function AccountManagement() {
       mobile_number: user.mobile_number,
       password: "",
       confirm_password: "",
+      new_password: "",
+      confirm_new_password: "",
       address: user.address,
       sex: user.sex,
       role_id: user.role_id ? String(user.role_id) : "",
@@ -233,6 +251,12 @@ export function AccountManagement() {
       return;
     }
 
+    // Saving an inactive account is the explicit reactivation path. The
+    // deactivation action remains available from the edit header, while a
+    // normal profile save restores login access.
+    const savedStatus = formMode === "edit" && selectedUser?.status === "inactive"
+      ? "active"
+      : form.status;
     const payload = {
       first_name: form.first_name.trim(),
       last_name: form.last_name.trim(),
@@ -242,7 +266,7 @@ export function AccountManagement() {
       sex: form.sex,
       role_id: Number(form.role_id),
       barangay_id: form.barangay_id ? Number(form.barangay_id) : null,
-      status: formMode === "add" ? "active" : form.status,
+      status: formMode === "add" ? "active" : savedStatus,
       ...(formMode === "add" ? { password: form.password } : {}),
     };
 
@@ -254,6 +278,15 @@ export function AccountManagement() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(withAuditActor(payload)),
         });
+        if (form.new_password.trim()) {
+          await fetchJson(`/api/app-users/${selectedUser.id}/password`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(withAuditActor({
+              new_password: form.new_password,
+            })),
+          });
+        }
       } else {
         await fetchJson("/api/app-users", {
           method: "POST",
@@ -342,6 +375,38 @@ export function AccountManagement() {
         title: "Failed to Update Status",
         description: statusError instanceof Error ? statusError.message : "Unable to update account status.",
         details: "Please try the status action again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function deactivateAccount() {
+    if (!deleteUser) return;
+    setIsSubmitting(true);
+    try {
+      await fetchJson(`/api/app-users/${deleteUser.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(withAuditActor({})),
+      });
+      setDeleteUser(null);
+      setSelectedUser(null);
+      await invalidateUsers();
+      setResultModal({
+        open: true,
+        type: "success",
+        title: "Account Deactivated",
+        description: `${deleteUser.full_name || deleteUser.email} can no longer log in.`,
+        details: "The account was retained to preserve audit and workflow history.",
+      });
+    } catch (deleteError) {
+      setResultModal({
+        open: true,
+        type: "error",
+        title: "Failed to Deactivate Account",
+        description: deleteError instanceof Error ? deleteError.message : "Unable to deactivate account.",
+        details: "The account and its historical records were left unchanged.",
       });
     } finally {
       setIsSubmitting(false);
@@ -453,6 +518,25 @@ export function AccountManagement() {
             /></label>
             {formMode === "add" ? <label>Password<input type="password" value={form.password} onChange={(event) => updateForm("password", event.target.value)} /></label> : null}
             {formMode === "add" ? <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => updateForm("confirm_password", event.target.value)} /></label> : null}
+            {formMode === "edit" ? <>
+              <div className={styles.passwordSection}><strong>Change Password</strong><span>Leave these fields blank to keep the current password.</span></div>
+              <label>New Password
+                <span className={styles.passwordInputWrap}>
+                  <input type={showNewPassword ? "text" : "password"} autoComplete="new-password" value={form.new_password} onChange={(event) => updateForm("new_password", event.target.value)} />
+                  <button className={styles.passwordToggle} type="button" onClick={() => setShowNewPassword((current) => !current)} aria-label={showNewPassword ? "Hide new password" : "Show new password"}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </button>
+                </span>
+              </label>
+              <label>Confirm New Password
+                <span className={styles.passwordInputWrap}>
+                  <input type={showConfirmNewPassword ? "text" : "password"} autoComplete="new-password" value={form.confirm_new_password} onChange={(event) => updateForm("confirm_new_password", event.target.value)} />
+                  <button className={styles.passwordToggle} type="button" onClick={() => setShowConfirmNewPassword((current) => !current)} aria-label={showConfirmNewPassword ? "Hide confirmed new password" : "Show confirmed new password"}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                  </button>
+                </span>
+              </label>
+            </> : null}
             <label>Role<select value={form.role_id} onChange={(event) => updateForm("role_id", event.target.value)}>
               <option value="">Select role</option>
               {roleOptions.map((role, index) => <option key={role} value={String(index + 1)}>{role}</option>)}
@@ -529,10 +613,10 @@ export function AccountManagement() {
             <span className={styles.warningIcon} aria-hidden="true">!</span>
             <div><h3 id="delete-account-title">Delete Account</h3><p>Account deletion is unavailable.</p></div>
           </div>
-          <div className={styles.deleteWarning}>Account status controls remain available.</div>
+          <div className={styles.deleteWarning}>The account will be deactivated and retained for audit history.</div>
           <div className={styles.deleteActions}>
             <button type="button" onClick={() => { setDeleteUser(null); setIsFormOpen(true); }}>Cancel</button>
-            <button type="button" disabled>Confirm</button>
+            <button type="button" disabled={isSubmitting} onClick={() => void deactivateAccount()}>{isSubmitting ? "Deactivating..." : "Confirm"}</button>
           </div>
         </div>
       </Modal>
@@ -568,6 +652,11 @@ function validateAccountForm(form: AccountFormState, mode: AccountFormMode) {
   if (mode === "add" && form.status === "blocked") return "New accounts cannot be created as blocked.";
   if (mode === "add" && !form.password.trim()) return "Password is required.";
   if (mode === "add" && form.password !== form.confirm_password) return "Password and confirm password must match.";
+  if (mode === "edit" && (form.new_password || form.confirm_new_password)) {
+    if (!form.new_password) return "New password is required to change the password.";
+    if (form.new_password.length < 8) return "New password must be at least 8 characters.";
+    if (form.new_password !== form.confirm_new_password) return "New password and confirmation must match.";
+  }
   if (!form.role_id) return "Role is required.";
   if (Number(form.role_id) === 4 && !form.barangay_id) return "Barangay is required for Barangay Official accounts.";
   return "";

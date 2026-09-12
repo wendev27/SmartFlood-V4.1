@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { notificationPresentation, type NotificationRow } from "@/adapters/notificationPresentation";
 import { getEmergencyNotifications } from "@/services/emergencyService";
@@ -10,6 +10,7 @@ import { getFloodStatusClass } from "@/lib/statusStyles";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { Pagination as SharedPagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
 import type { DashboardRole, PageKey } from "@/types/navigation";
 import styles from "./NotificationPanel.module.css";
 
@@ -22,18 +23,32 @@ export function NotificationPanel({ role, onBack, onNavigate, onOpenAllocation }
   onNavigate: (page: PageKey) => void;
   onOpenAllocation: (id: string) => void;
 }) {
-  // Match the existing GET route; CDRRMO cannot read the barangay relief inbox.
-  const canList = role === "barangay" || role === "cswdd" || role === "super";
+  // Command-center roles share access to the emergency relief inbox.
+  const canList = role === "barangay" || role === "cswdd" || role === "cdrrmo" || role === "super";
   const inboxQuery = useQuery({ queryKey: queryKeys.notifications.emergency, queryFn: () => getEmergencyNotifications(), enabled: canList, staleTime: queryStaleTime.operational });
   const sensorsQuery = useQuery({ queryKey: queryKeys.sensors.latest, queryFn: getSensors, staleTime: queryStaleTime.realTime, refetchInterval: 5000 });
   const rows = useMemo(() => canList ? notificationPresentation(inboxQuery.data ?? []) : [], [canList, inboxQuery.data]);
+  const pageSize = 6;
   const [filter, setFilter] = useState<Filter>("All");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const ready = canList && !inboxQuery.isPending && !inboxQuery.isError;
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
     return rows.filter((row) => (filter === "All" || (filter === "Unread" ? row.unread : row.category === filter)) && (!term || `${row.title} ${row.message}`.toLowerCase().includes(term)));
   }, [rows, filter, query]);
+  const paginated = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+    const safePage = Math.min(page, totalPages);
+    return {
+      rows: visible.slice((safePage - 1) * pageSize, safePage * pageSize),
+      pagination: { page: safePage, limit: pageSize, total: visible.length, totalPages } satisfies PaginationState,
+    };
+  }, [page, visible]);
+  useEffect(() => { setPage(1); }, [filter, query]);
+  useEffect(() => {
+    if (page !== paginated.pagination.page) setPage(paginated.pagination.page);
+  }, [page, paginated.pagination.page]);
   const severeCount = sensorsQuery.isPending ? "…" : sensorsQuery.isError ? "Unavailable" : (sensorsQuery.data ?? []).filter((sensor) => getFloodStatusClass(sensor.computedStatus, sensor.waterLevelM) === "severity").length;
   const total = !canList || inboxQuery.isError ? "Unavailable" : inboxQuery.isPending ? "…" : rows.length;
   const unread = ready ? rows.filter((row) => row.unread).length : total;
@@ -62,13 +77,14 @@ export function NotificationPanel({ role, onBack, onNavigate, onOpenAllocation }
       {!canList ? <EmptyState title="Notification inbox unavailable" description="There is no notification inbox available for your role." /> : null}
       {canList && inboxQuery.isPending ? <LoadingState message="Loading notifications…" /> : null}
       {canList && inboxQuery.isError ? <ErrorState title="Unable to load notifications" message={inboxQuery.error instanceof Error ? inboxQuery.error.message : "Please try again."} onRetry={() => inboxQuery.refetch()} /> : null}
-      {ready ? visible.map((row) => <article key={row.id} role={row.isAllocation ? "link" : undefined} tabIndex={row.isAllocation ? 0 : undefined} onClick={() => openNotification(row)} onKeyDown={(event) => { if (row.isAllocation && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openNotification(row); } }} aria-label={row.isAllocation ? `Open ${row.title}` : undefined}>
+      {ready ? paginated.rows.map((row) => <article key={row.id} role={row.isAllocation ? "link" : undefined} tabIndex={row.isAllocation ? 0 : undefined} onClick={() => openNotification(row)} onKeyDown={(event) => { if (row.isAllocation && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openNotification(row); } }} aria-label={row.isAllocation ? `Open ${row.title}` : undefined}>
         {row.unread ? <i className={styles.unread} aria-label="Unread by recipient barangay" /> : null}
         <span className={`${styles.itemIcon} ${row.category === "Relief" ? styles.relief : styles.system}`}><Symbol kind={row.category?.toLowerCase() ?? "bell"} /></span>
         <div><h2>{row.title}</h2><p>{row.message}</p></div>
       </article>) : null}
       {ready && visible.length === 0 ? <EmptyState searchResult={Boolean(query || filter !== "All")} title={rows.length ? "No notifications match" : "No relief notifications"} description={rows.length ? "We couldn’t find any notifications matching your search or active filter." : "Relief allocation notifications will appear here when available."} /> : null}
     </div>
+    {ready && visible.length > 0 ? <SharedPagination pagination={paginated.pagination} onPageChange={setPage} label="Notifications" /> : null}
   </section>;
 }
 

@@ -19,6 +19,11 @@ export interface NavItem {
   icon: "home" | "monitor" | "folder" | "document" | "droplet" | "cube" | "signal" | "users" | "check";
 }
 
+export interface BarangayOption {
+  barangay_id: number;
+  barangay_name: string;
+}
+
 export interface PageCopy {
   title: string;
   subtitle: string;

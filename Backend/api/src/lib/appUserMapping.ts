@@ -12,11 +12,9 @@ export const displayRoleNames: Record<number, string> = {
   4: "Barangay Official",
 };
 
-export const fallbackBarangays: Record<number, string> = {
-  1: "Barangay Tanong",
-  2: "Barangay Catmon",
-  3: "Barangay Potrero",
-};
+// Barangay names belong to the master table. Do not reintroduce renamed
+// barangays through an application fallback.
+export const fallbackBarangays: Record<number, string> = {};
 
 export const allowedAccountStatuses = new Set(["active", "inactive", "blocked"]);
 
@@ -34,7 +32,8 @@ export function accountDepartment(roleId: number | null, barangayName?: string |
 export function sanitizeAppUser(row: Record<string, unknown>, barangayName?: string | null) {
   const roleId = row.role_id == null ? null : Number(row.role_id);
   const barangayId = row.barangay_id == null ? null : Number(row.barangay_id);
-  const resolvedBarangay = barangayName ?? String(row.barangay ?? fallbackBarangays[Number(barangayId)] ?? "");
+  const resolvedBarangay = barangayName
+    ?? (barangayId == null ? String(row.barangay ?? "") : "");
 
   return {
     id: String(row.id ?? ""),

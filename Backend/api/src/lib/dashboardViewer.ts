@@ -31,7 +31,15 @@ export async function getDashboardViewer(req: NextRequest): Promise<DashboardVie
 
   const roleId = data.role_id == null ? null : Number(data.role_id);
   const barangayId = data.barangay_id == null ? null : Number(data.barangay_id);
-  const barangayName = String(data.barangay ?? fallbackBarangays[Number(barangayId)] ?? "");
+  let barangayName = String(data.barangay ?? fallbackBarangays[Number(barangayId)] ?? "");
+  if (barangayId != null) {
+    const { data: barangay } = await supabaseServer
+      .from("barangays")
+      .select("barangay_id,barangay_name")
+      .eq("barangay_id", barangayId)
+      .maybeSingle();
+    barangayName = String(barangay?.barangay_name ?? barangay?.name ?? "");
+  }
   return {
     id: String(data.id),
     first_name: String(data.first_name ?? ""),
@@ -47,7 +55,12 @@ export async function getDashboardViewer(req: NextRequest): Promise<DashboardVie
 }
 
 export function dashboardViewerRole(viewer: DashboardViewer | null | undefined): LogRole | null {
+  if (viewer && (viewer.role_id === 1 || viewer.role_id === 2)) return "super";
   return normalizeLogRole(viewer);
+}
+
+export function isCommandCenterViewer(viewer: DashboardViewer | null | undefined): boolean {
+  return viewer?.role_id === 1 || viewer?.role_id === 2;
 }
 
 export function auditActorForViewer(viewer: DashboardViewer) {

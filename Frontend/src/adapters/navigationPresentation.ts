@@ -1,4 +1,4 @@
-import type { DashboardRole, NavItem, PageKey } from "@/types/navigation";
+import type { BarangayOption, DashboardRole, NavItem, PageKey } from "@/types/navigation";
 
 export interface NavigationGroup {
   label: string;
@@ -7,7 +7,7 @@ export interface NavigationGroup {
 }
 
 /** REY labels and hierarchy over V3.2's already-authorized destinations. */
-export function navigationPresentation(items: NavItem[], role?: DashboardRole, logLabel?: string): { primary: NavItem[]; groups: NavigationGroup[] } {
+export function navigationPresentation(items: NavItem[], role?: DashboardRole, logLabel?: string, barangays: readonly BarangayOption[] = []): { primary: NavItem[]; groups: NavigationGroup[] } {
   const presented = items.map((item): NavItem => {
     if (item.key === "dashboard") return { ...item, label: "Home" };
     if (item.key === "relief" || item.key === "emergencyNotifications") return { ...item, label: "Relief Management", icon: "cube" };
@@ -16,7 +16,7 @@ export function navigationPresentation(items: NavItem[], role?: DashboardRole, l
     return item;
   });
   // REY uses flat navigation for CSWDD/barangay. Extra V3.2 features stay reachable.
-  if (role !== "super") {
+  if (role !== "super" && role !== "cdrrmo") {
     const visible = role === "barangay" ? presented.filter((item) => item.key !== "reliefDistribution") : presented;
     return { primary: visible, groups: [] };
   }
@@ -29,9 +29,8 @@ export function navigationPresentation(items: NavItem[], role?: DashboardRole, l
     .map((item) => item.key === "residents"
       ? { ...item, label: "Registry of Barangay Inhabitants (RBI)" }
       : { ...item, label: "Resident Account Registration Management" });
-  const barangayNames = ["Barangay Tanong", "Barangay Catmon", "Barangay Potrero"];
-  const barangayGroups = barangayNames.map((label) => ({
-    label,
+  const barangayGroups = barangays.map((barangay) => ({
+    label: barangay.barangay_name,
     icon: "users" as const,
     items: [
       { key: "emergencyNotifications" as const, label: "Relief Management", icon: "cube" as const },

@@ -35,6 +35,12 @@ class FakeRepository:
             ],
         )
 
+    def get_barangays(self):
+        return [
+            {"barangay_id": 1, "barangay_name": "Barangay Tanong"},
+            {"barangay_id": 2, "barangay_name": "Barangay Longos"},
+        ]
+
     def get_families(self):
         return [
             {"barangay_id": 1, "total_family_members": 9, "pwd_count": 2, "elderly_count": 2},
@@ -68,6 +74,8 @@ class RecommendationApprovalFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.saved_rows, [])
         self.assertEqual(len(response.plans), 3)
         self.assertEqual([plan["plan_id"] for plan in response.plans], ["severity_first", "vulnerability_first", "balanced"])
+        self.assertTrue(all(row["barangay_name"] != "Barangay Catmon" for row in response.data))
+        self.assertIn("Barangay Longos", {row["barangay_name"] for row in response.data})
 
     async def test_approve_saves_selected_plan_to_history(self):
         repository = FakeRepository()

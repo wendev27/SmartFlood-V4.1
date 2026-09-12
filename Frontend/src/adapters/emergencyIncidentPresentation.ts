@@ -12,6 +12,8 @@ export function incidentPresentation(row: EmergencyIncident, barangayId?: number
     id: row.id, residentName: row.resident.name || null, location: row.location, phone: row.resident.phone,
     submittedAtLabel: dateLabel(row.created_at), description: row.description, status: labels[row.status],
     photos: row.image_paths.map((path, index) => ({ id: path, url: `/api/emergency-reports/${encodeURIComponent(row.id)}/photos/${index}${scope}`, description: `Emergency report photo ${index + 1}` })),
-    residentConfirmation: row.resident_confirmed === true ? { message: row.feedback, confirmedAtLabel: dateLabel(row.resolved_at) } : null,
+    residentConfirmation: row.resident_confirmed === true || Boolean(row.feedback)
+      ? { message: row.feedback, confirmedAtLabel: dateLabel(row.resolved_at), rating: row.rating }
+      : null,
   };
 }

@@ -7,6 +7,12 @@ from app.ilp import OptimizationError
 
 
 class RecommendationEngineTests(unittest.TestCase):
+    BARANGAYS = [
+        {"barangay_id": 1, "barangay_name": "Barangay Tanong"},
+        {"barangay_id": 2, "barangay_name": "Barangay Longos"},
+        {"barangay_id": 3, "barangay_name": "Barangay Potrero"},
+    ]
+
     def test_prioritizes_high_risk_barangay_and_respects_inventory(self) -> None:
         sensors = [
             {"_id": "tanong-sensor", "barangayName": "Tanong"},
@@ -22,7 +28,7 @@ class RecommendationEngineTests(unittest.TestCase):
         ]
         inventory = {"family_food_packs": 2, "medicine_kits": 1, "relief_goods_individual": 6}
 
-        rows = generate_recommendations(sensors, readings, families, inventory)
+        rows = generate_recommendations(sensors, readings, families, inventory, self.BARANGAYS)
 
         self.assertEqual(rows[0]["barangay_name"], "Barangay Tanong")
         self.assertEqual(rows[0]["risk_level"], "severity")
@@ -35,10 +41,33 @@ class RecommendationEngineTests(unittest.TestCase):
             self.assertIsInstance(row["recommended_medicine_kits"], int)
             self.assertIsInstance(row["recommended_relief_goods_individual"], int)
 
+    def test_canonical_registry_name_wins_over_stale_sensor_name(self) -> None:
+        rows = generate_recommendations(
+            [{"_id": "longos-sensor", "barangay_id": 2, "barangayName": "Catmon"}],
+            [{"_id": "longos-sensor", "doc": {"waterLevelM": 0.8}}],
+            [{"barangay_id": 2, "total_family_members": 4}],
+            {"family_food_packs": 1, "medicine_kits": 0, "relief_goods_individual": 0},
+            self.BARANGAYS,
+        )
+
+        longos = next(row for row in rows if row["barangay_id"] == "2")
+        self.assertEqual(longos["barangay_name"], "Barangay Longos")
+        self.assertEqual(longos["risk_level"], "flood_warning")
+
+    def test_new_registry_barangay_is_scored_without_code_change(self) -> None:
+        barangays = [*self.BARANGAYS, {"barangay_id": 4, "barangay_name": "Barangay Tinajeros"}]
+        rows = generate_recommendations(
+            [], [], [{"barangay_id": 4, "total_family_members": 6}],
+            {"family_food_packs": 2, "medicine_kits": 0, "relief_goods_individual": 0}, barangays,
+        )
+
+        self.assertEqual({row["barangay_id"] for row in rows}, {"1", "2", "3", "4"})
+        self.assertIn("Barangay Tinajeros", {row["barangay_name"] for row in rows})
+
     def test_missing_demographic_data_is_reported(self) -> None:
         with self.assertRaisesRegex(OptimizationError, "Missing demographic family data"):
             generate_recommendations(
-                [], [], [], {"family_food_packs": 3, "medicine_kits": 0, "relief_goods_individual": 0}
+                [], [], [], {"family_food_packs": 3, "medicine_kits": 0, "relief_goods_individual": 0}, self.BARANGAYS
             )
 
     def test_exposes_ahp_fuzzy_and_readable_reasoning_details(self) -> None:
@@ -46,7 +75,7 @@ class RecommendationEngineTests(unittest.TestCase):
             [{"_id": "tanong-sensor", "barangayName": "Tanong"}],
             [{"_id": "tanong-sensor", "doc": {"waterLevelM": 0.8}}],
             [{"barangay_id": 1, "infant_count": 2, "elderly_count": 1, "pwd_count": 1}],
-            {"family_food_packs": 1, "medicine_kits": 1, "relief_goods_individual": 1},
+            {"family_food_packs": 1, "medicine_kits": 1, "relief_goods_individual": 1}, self.BARANGAYS,
         )
 
         tanong = next(row for row in rows if row["barangay_name"] == "Barangay Tanong")
@@ -69,7 +98,7 @@ class RecommendationEngineTests(unittest.TestCase):
                 {"barangay_id": 2, "total_family_members": "9.6"},
                 {"barangay_id": 3, "total_family_members": "8.4"},
             ],
-            {"family_food_packs": 2, "medicine_kits": 2, "relief_goods_individual": 7},
+            {"family_food_packs": 2, "medicine_kits": 2, "relief_goods_individual": 7}, self.BARANGAYS,
         )
 
         self.assertLessEqual(sum(row["recommended_family_food_packs"] for row in rows), 2)
@@ -81,7 +110,7 @@ class RecommendationEngineTests(unittest.TestCase):
             [{"_id": "tanong-sensor", "barangayName": "Tanong"}],
             [{"_id": "tanong-sensor", "doc": {"waterLevelM": 1.3}}],
             [{"barangay_id": 1, "total_family_members": 10, "pwd_count": 2}],
-            {"family_food_packs": 5, "medicine_kits": 2, "relief_goods_individual": 9},
+            {"family_food_packs": 5, "medicine_kits": 2, "relief_goods_individual": 9}, self.BARANGAYS,
         )
 
         self.assertEqual([plan["plan_id"] for plan in plans], ["severity_first", "vulnerability_first", "balanced"])
@@ -97,7 +126,7 @@ class RecommendationEngineTests(unittest.TestCase):
                 {"barangay_id": 1, "affected_families": 1, "total_family_members": 2, "pwd_count": 1},
                 {"barangay_id": 2, "affected_families": 2, "total_family_members": 3, "elderly_count": 1},
             ],
-            {"family_food_packs": 99, "medicine_kits": 99, "relief_goods_individual": 99},
+            {"family_food_packs": 99, "medicine_kits": 99, "relief_goods_individual": 99}, self.BARANGAYS,
         )
 
         self.assertLessEqual(sum(row["recommended_family_food_packs"] for row in rows), 2)
@@ -121,7 +150,7 @@ class RecommendationEngineTests(unittest.TestCase):
                 {"barangay_id": 2, "total_family_members": 7, "infant_count": 2, "pregnant_count": 1},
                 {"barangay_id": 3, "total_family_members": 4, "lactating_count": 1, "elderly_count": 1},
             ],
-            {"family_food_packs": 500, "medicine_kits": 500, "relief_goods_individual": 500},
+            {"family_food_packs": 500, "medicine_kits": 500, "relief_goods_individual": 500}, self.BARANGAYS,
         )
 
         signatures = {
@@ -145,7 +174,7 @@ class RecommendationEngineTests(unittest.TestCase):
             [],
             [],
             [{"barangay_id": 1, "affected_families": 2, "total_family_members": 5, "pwd_count": 1}],
-            {"family_food_packs": 0, "medicine_kits": 0, "relief_goods_individual": 0},
+            {"family_food_packs": 0, "medicine_kits": 0, "relief_goods_individual": 0}, self.BARANGAYS,
         )
 
         for row in rows:
@@ -161,7 +190,7 @@ class RecommendationEngineTests(unittest.TestCase):
                 {"barangay_id": 1, "affected_families": 10, "total_family_members": 20, "pwd_count": 2},
                 {"barangay_id": 2, "affected_families": 8, "total_family_members": 18, "elderly_count": 2},
             ],
-            {"family_food_packs": 1, "medicine_kits": 1, "relief_goods_individual": 1},
+            {"family_food_packs": 1, "medicine_kits": 1, "relief_goods_individual": 1}, self.BARANGAYS,
         )
 
         for field in ("recommended_family_food_packs", "recommended_medicine_kits", "recommended_relief_goods_individual"):
@@ -175,7 +204,7 @@ class RecommendationEngineTests(unittest.TestCase):
             [{"_id": "tanong-sensor", "barangayName": "Tanong"}],
             [],
             [{"barangay_id": 1, "affected_families": 2, "total_family_members": 5}],
-            {"family_food_packs": 1, "medicine_kits": 0, "relief_goods_individual": 1},
+            {"family_food_packs": 1, "medicine_kits": 0, "relief_goods_individual": 1}, self.BARANGAYS,
         )
 
         tanong = next(row for row in rows if row["barangay_name"] == "Barangay Tanong")
@@ -188,7 +217,7 @@ class RecommendationEngineTests(unittest.TestCase):
                 [],
                 [],
                 [{"barangay_id": 1, "affected_families": 2, "total_family_members": 5}],
-                {"family_food_packs": -1, "medicine_kits": 0, "relief_goods_individual": 0},
+                {"family_food_packs": -1, "medicine_kits": 0, "relief_goods_individual": 0}, self.BARANGAYS,
             )
 
 

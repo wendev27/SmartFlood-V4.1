@@ -1,15 +1,20 @@
 import type { DashboardRole } from "@/types/navigation";
 
 /** Decorative seals selected from the signed-in user's barangay identity. */
-export function profileSealForRole(role: DashboardRole | undefined, barangayName?: string | null): string | null {
+export function profileSealForRole(role: DashboardRole | undefined, barangayName?: string | null, barangayId?: number | null): string | null {
   if (role === "cswdd") return "/images/cswdd/cswdd-seal.png";
   if (role !== "barangay") return null;
-  const key = (barangayName ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/^barangay\s+/, "").trim();
-  const seals: Record<string, string> = {
-    longos: "/images/dashboard/barangay-longos-seal.png",
-    catmon: "/images/dashboard/barangay-longos-seal.png",
-    tanong: "/images/dashboard/barangay-tanong-seal.jpg",
-    potrero: "/images/dashboard/barangay-potrero-seal.png",
+  const sealsById: Record<number, string> = {
+    1: "/images/dashboard/barangay-tanong-seal.jpg",
+    2: "/images/dashboard/barangay-longos-seal.png",
+    3: "/images/dashboard/barangay-potrero-seal.png",
   };
-  return seals[key] ?? null;
+  if (barangayId != null && sealsById[barangayId]) return sealsById[barangayId];
+  const key = (barangayName ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/^barangay\s+/, "").trim();
+  const sealsByName: Record<string, string> = {
+    longos: sealsById[2],
+    tanong: sealsById[1],
+    potrero: sealsById[3],
+  };
+  return sealsByName[key] ?? null;
 }

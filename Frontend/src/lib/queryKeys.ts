@@ -34,6 +34,7 @@ export const queryKeys = {
   },
   accounts: {
     users: ["accounts", "users"] as const,
+    barangays: ["accounts", "barangays"] as const,
   },
   logs: {
     audit: ["logs", "audit"] as const,

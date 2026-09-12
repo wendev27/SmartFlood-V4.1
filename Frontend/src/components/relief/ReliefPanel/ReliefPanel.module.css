@@ -377,11 +377,18 @@
 }
 
 .actionButton {
+  background: #0088ff;
   border-radius: 8px;
   flex: 1 1 190px;
   font-size: 12px;
+  font-weight: 600;
   min-height: 46px;
   white-space: nowrap;
+}
+
+.actionButton:hover,
+.actionButton:focus-visible {
+  background: #0088ff;
 }
 
 .stateMessage,
@@ -782,13 +789,13 @@
   border:1px solid rgba(255,255,255,.7);
   border-radius:16px;
   box-shadow:0 20px 55px rgba(15,23,42,.22),0 8px 22px rgba(0,136,255,.14);
-  min-height:638px;
+  min-height:0;
 }
 .cswddInventoryDialog .modalHeader { background:#fff; color:#1e1e1e; min-height:86px; padding:34px 35px 12px; }
 .cswddInventoryDialog .modalHeader h3 { font-size:20px; font-weight:600; line-height:30px; }
 .cswddInventoryDialog .closeButtonLight,.cswddConfirmDialog .closeButtonLight,.cswddReportDialog .closeButtonDark { border-radius:0; height:44px; padding:0; width:44px; }
 .cswddInventoryDialog .closeButtonLight img,.cswddConfirmDialog .closeButtonLight img,.cswddReportDialog .closeButtonDark img { display:block; height:44px; width:44px; }
-.cswddInventoryDialog .inventoryBody { max-height:calc(100dvh - 110px); padding:10px 35px 24px; }
+.cswddInventoryDialog .inventoryBody { max-height:calc(100dvh - 110px); padding:10px 35px 34px; }
 .inventoryBarangay { color:#1e1e1e; display:block; font-size:16px; margin-top:2px; }
 .inventoryBarangay>span:first-child { display:block; }
 .inventorySelectWrap { display:block; height:42px; margin-top:8px; max-width:100%; position:relative; width:268px; }

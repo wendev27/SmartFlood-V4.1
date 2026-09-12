@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { fetchJson } from "@/services/apiClient";
-import { clearStoredSession, setStoredSession, type StoredSessionUser } from "@/lib/authSession";
+import { clearStoredSession, getCurrentUser, setStoredSession, type StoredSessionUser } from "@/lib/authSession";
 import styles from "./LoginPage.module.css";
 
 function UserIcon() {
@@ -40,6 +40,15 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  useEffect(() => {
+    if (getCurrentUser()) {
+      router.replace("/dashboard");
+      return;
+    }
+    setSessionChecked(true);
+  }, [router]);
 
   async function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,6 +76,8 @@ export function LoginPage() {
       setIsSubmitting(false);
     }
   }
+
+  if (!sessionChecked) return null;
 
   return (
     <main className={styles.page}>

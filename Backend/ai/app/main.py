@@ -49,8 +49,9 @@ async def create_recommendations(
         raise HTTPException(status_code=400, detail="Please input available relief inventory before generating recommendations.")
     sensors, readings = await run_in_threadpool(repository.get_sensor_snapshot)
     families = await run_in_threadpool(repository.get_families)
+    barangays = await run_in_threadpool(repository.get_barangays)
     try:
-        rows = generate_recommendations(sensors, readings, families, inventory.inventory_payload())
+        rows = generate_recommendations(sensors, readings, families, inventory.inventory_payload(), barangays)
     except OptimizationError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     await run_in_threadpool(

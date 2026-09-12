@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
 import { pickAppUserPayload, sanitizeAppUser } from "@/lib/appUserMapping";
-import { getDashboardViewer } from "@/lib/dashboardViewer";
+import { getDashboardViewer, isCommandCenterViewer } from "@/lib/dashboardViewer";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const privateResponseHeaders = { "Cache-Control": "private, no-store", Vary: "Cookie" };
@@ -10,7 +10,7 @@ const privateResponseHeaders = { "Cache-Control": "private, no-store", Vary: "Co
 async function requireSuperAdmin(req: NextRequest) {
   const viewer = await getDashboardViewer(req);
   if (!viewer) return NextResponse.json({ success: false, error: "Unauthorized." }, { status: 401 });
-  if (viewer.role_id !== 1) return NextResponse.json({ success: false, error: "Forbidden." }, { status: 403 });
+  if (!isCommandCenterViewer(viewer)) return NextResponse.json({ success: false, error: "Forbidden." }, { status: 403 });
   return null;
 }
 
@@ -104,11 +104,11 @@ function validateCreateBody(body: Record<string, unknown>) {
 
 async function fetchBarangayNames() {
   const names = new Map<number, string>();
-  const { data } = await supabaseServer.from("barangays").select("id,barangay_id,name,barangay_name");
+  const { data } = await supabaseServer.from("barangays").select("barangay_id,barangay_name");
 
   for (const row of data ?? []) {
-    const id = Number(row.barangay_id ?? row.id);
-    const name = String(row.barangay_name ?? row.name ?? "");
+    const id = Number(row.barangay_id);
+    const name = String(row.barangay_name ?? "");
     if (Number.isFinite(id) && name) names.set(id, name);
   }
 

@@ -42,17 +42,22 @@ const { queryKeys } = require("@/lib/queryKeys");
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
 test("navigation preserves role destinations and Barangay group structure", () => {
+  const barangays = [
+    { barangay_id: 1, barangay_name: "Barangay Tanong" },
+    { barangay_id: 2, barangay_name: "Barangay Longos" },
+    { barangay_id: 3, barangay_name: "Barangay Potrero" },
+  ];
   const expected = {
     super: ["dashboard", "monitoring", "relief", "reliefManagement", "reliefDistribution", "residents", "accounts", "logs", "systemLogs"],
     cswdd: ["dashboard", "monitoring", "relief", "residents", "systemLogs"],
-    cdrrmo: ["dashboard", "monitoring", "systemLogs"],
+    cdrrmo: ["dashboard", "monitoring", "relief", "reliefManagement", "reliefDistribution", "residents", "accounts", "logs", "systemLogs"],
     barangay: ["dashboard", "monitoring", "emergencyNotifications", "reliefDistribution", "residents", "accounts", "systemLogs"],
   };
   for (const [role, keys] of Object.entries(expected)) {
     const items = navigationItemsForRole(role);
     assert.deepEqual(items.map((item) => item.key), keys);
     const original = JSON.stringify(items);
-    const grouped = navigationPresentation(items, role);
+    const grouped = navigationPresentation(items, role, undefined, barangays);
     const flattened = [...grouped.primary, ...grouped.groups.flatMap((group) => group.items)];
     assert.equal(flattened.some((item) => item.key === "sensors" || item.label === "Sensor History"), false);
     if (role === "cswdd") {
@@ -60,20 +65,20 @@ test("navigation preserves role destinations and Barangay group structure", () =
     }
     assert.equal(flattened.some((item) => item.key === "reliefManagement"), false);
     const visibleKeys = role === "barangay" ? keys.filter((key) => key !== "reliefDistribution") : keys;
-    if (role === "super") {
-      assert.deepEqual(grouped.groups.map((group) => group.label), ["CSWDD", "Barangay Tanong", "Barangay Catmon", "Barangay Potrero"]);
+    if (role === "super" || role === "cdrrmo") {
+      assert.deepEqual(grouped.groups.map((group) => group.label), ["CSWDD", "Barangay Tanong", "Barangay Longos", "Barangay Potrero"]);
       assert.deepEqual(grouped.groups.find((group) => group.label === "CSWDD").items.map((item) => item.key), ["relief", "residents"]);
       assert.equal(grouped.groups.filter((group) => group.label.startsWith("Barangay")).every((group) => group.items.map((item) => item.key).join("|") === "emergencyNotifications|reliefDistribution|residents|accounts"), true);
-      assert.equal(grouped.groups.filter((group) => group.label.startsWith("Barangay")).every((group) => group.items.map((item) => item.label).join("|") === "Relief Management|Emergency Report Management|Resident Information|Resident Account Registration Management"), true);
+      assert.equal(grouped.groups.filter((group) => group.label.startsWith("Barangay")).every((group) => group.items.map((item) => item.label).join("|") === "Relief Management|Emergency Report Management|Registry of Barangay Inhabitants (RBI)|Resident Account Registration Management"), true);
     } else {
       assert.deepEqual(flattened.map((item) => item.key).sort(), [...visibleKeys].sort());
       assert.equal(new Set(flattened.map((item) => item.key)).size, visibleKeys.length);
     }
     assert.equal(JSON.stringify(items), original, "presentation must not mutate role navigation definitions");
     assert.equal(flattened.find((item) => item.key === "dashboard").label, "Home");
-    if (role !== "super") assert.equal(grouped.groups.length, 0, "REY uses flat role navigation outside the super-user groups");
+    if (role !== "super" && role !== "cdrrmo") assert.equal(grouped.groups.length, 0, "REY uses flat role navigation outside the command-center groups");
     assert.equal(flattened.some((item) => item.key === "reliefDistribution"), role !== "barangay" && keys.includes("reliefDistribution"));
-    if (role !== "super") assert.ok(flattened.every((item) => item.key !== "reliefDistribution" || !/Emergency Report/.test(item.label)));
+    if (role !== "super" && role !== "cdrrmo") assert.ok(flattened.every((item) => item.key !== "reliefDistribution" || !/Emergency Report/.test(item.label)));
   }
 });
 
@@ -197,6 +202,7 @@ test("history narratives use measurements and recorded timestamps without invent
 test("profile seals follow actual role and barangay without substituting another identity", () => {
   assert.equal(profileSealForRole("cswdd", "Barangay Catmon"), "/images/cswdd/cswdd-seal.png");
   assert.equal(profileSealForRole("barangay", "Barangay Tañong"), "/images/dashboard/barangay-tanong-seal.jpg");
+  assert.equal(profileSealForRole("barangay", "Old label", 2), "/images/dashboard/barangay-longos-seal.png");
   assert.equal(profileSealForRole("barangay", "Barangay Catmon"), null);
   assert.equal(profileSealForRole("barangay", "Longos resident"), null);
   assert.equal(profileSealForRole("cdrrmo", "Barangay Potrero"), null);
@@ -221,15 +227,12 @@ test("notification adapter preserves identity and recipient read status without 
   assert.equal(JSON.stringify(records), before);
 });
 
-test("notification view suppresses cached barangay records for CDRRMO and exposes actual records to supported roles", () => {
+test("notification view exposes actual records to command-center and supported roles", () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.notifications.emergency, [{ notification_id: "test-notification", title: "Scoped allocation fixture", message: "Scoped relief details", status: "sent", source_type: "emergency_allocation_item" }]);
   client.setQueryData(queryKeys.sensors.latest, []);
   const htmlFor = (role) => renderToStaticMarkup(React.createElement(QueryClientProvider, { client }, React.createElement(NotificationPanel, { role, onBack() {}, onNavigate() {}, onOpenAllocation() {} })));
-  const restricted = htmlFor("cdrrmo");
-  assert.match(restricted, /Notification inbox unavailable/);
-  assert.doesNotMatch(restricted, /Scoped allocation fixture|Scoped relief details/);
-  for (const role of ["barangay", "cswdd", "super"]) {
+  for (const role of ["barangay", "cswdd", "cdrrmo", "super"]) {
     const html = htmlFor(role);
     assert.match(html, /Scoped allocation fixture/);
     assert.match(html, /Scoped relief details/);

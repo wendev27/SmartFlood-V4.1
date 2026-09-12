@@ -27,6 +27,8 @@ FAMILY_FIELDS = (
 
 
 class SmartFloodRepository(Protocol):
+    def get_barangays(self) -> list[dict[str, Any]]: ...
+
     def get_sensor_snapshot(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]: ...
 
     def get_families(self) -> list[dict[str, Any]]: ...
@@ -58,6 +60,9 @@ class DatabaseRepository:
             )
         )
         return sensors, readings
+
+    def get_barangays(self) -> list[dict[str, Any]]:
+        return self._select("barangays", "barangay_id,barangay_name")
 
     def get_families(self) -> list[dict[str, Any]]:
         return self._select("families", FAMILY_FIELDS)

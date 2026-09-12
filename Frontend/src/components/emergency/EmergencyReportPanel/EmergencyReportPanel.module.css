@@ -4,6 +4,26 @@
 .overlay{align-items:start;background:rgba(255,255,255,.38);backdrop-filter:blur(11px);display:grid;inset:0;justify-items:center;overflow-y:auto;padding:32px 20px;position:fixed;z-index:100}.dialog{align-self:center;margin:auto;max-height:none}.overlay:before{content:"";min-height:calc(100vh - 64px);width:0}.overlay>.dialog{grid-column:2;grid-row:1}.overlay>.toast{grid-column:1/-1}
 .overlay{align-items:center;display:flex;justify-content:safe center}.overlay:before{content:none}.overlay>.dialog{flex:none;margin:auto}.overlay>.toast{position:fixed}
 .awaitingResolution{background:#f0fdf4;border:1px solid #86efac;border-radius:12px;color:#166534;font-size:14px;margin:28px auto 0;max-width:560px;padding:14px 18px;text-align:center}
+.feedbackCard { background: linear-gradient(135deg, #f0fdf4, #ffffff); border: 1px solid #bbf7d0; border-radius: 16px; box-shadow: 0 6px 18px rgba(22, 101, 52, .08); margin: 28px 0 0; padding: 18px 22px; }
+.feedbackHeader { align-items: center; display: flex; gap: 12px; }
+.feedbackIcon { align-items: center; background: #dcfce7; border: 1px solid #86efac; border-radius: 50%; color: #16a34a; display: flex; font-weight: 700; height: 34px; justify-content: center; width: 34px; }
+.feedbackHeader strong, .feedbackHeader small { display: block; }
+.feedbackHeader strong { color: #166534; font-size: 16px; }
+.feedbackHeader small { color: #64748b; font-size: 12px; margin-top: 2px; }
+.feedbackCard > p { color: #334155; font-size: 15px; line-height: 1.55; margin: 16px 0 12px; white-space: pre-line; }
+.feedbackMeta { align-items: center; color: #f59e0b; display: flex; font-size: 16px; gap: 14px; }
+.feedbackMeta small { color: #64748b; font-size: 12px; }
+.emptyStars { color: #cbd5e1; }
+.feedbackEmpty { background: #f8fafc; border-color: #e2e8f0; color: #64748b; }
+.feedbackEmpty > strong { color: #475569; }
+.feedbackEmpty > p { color: #64748b; margin-bottom: 0; }
+.reportMessageCard { background: linear-gradient(135deg, #fff7ed, #ffffff); border: 1px solid #fed7aa; border-radius: 16px; box-shadow: 0 6px 18px rgba(234, 88, 12, .08); margin: 26px 0 0; padding: 18px 22px; }
+.reportUrgencyIcon { align-items: center; background: #ffedd5; border: 1px solid #fdba74; border-radius: 50%; color: #ea580c; display: flex; font-size: 18px; font-weight: 800; height: 34px; justify-content: center; width: 34px; }
+.reportMessageCard .feedbackHeader strong { color: #9a3412; }
+.reportMessageCard .feedbackHeader small { color: #c2410c; }
+.reportMessage { color: #431407; font-size: 16px; line-height: 1.55; margin-top: 16px; white-space: pre-line; }
+.reportMessage p { margin: 0 0 8px; }
+.reportMessage p:last-child { margin-bottom: 0; }
 
 /* Status-first emergency report layout; report rows/cards remain unchanged. */
 .statusTabs{align-items:center;border-bottom:1px solid #dbe5f0;display:flex;gap:30px;margin-bottom:20px;max-width:720px}

@@ -62,14 +62,13 @@ export default function DashboardPage() {
     const keys = navigationItems.map((item) => item.key);
     // Super-admin barangay groups expose the existing barangay emergency module
     // as a scoped destination even though it is not a primary super-admin item.
-    if (session?.role === "super") keys.push("emergencyNotifications");
+    if (session?.role === "super" || session?.role === "cdrrmo") keys.push("emergencyNotifications");
     // CSWDD opens the distribution list from the Relief Management landing card.
     // Keep it reachable without adding a duplicate primary sidebar item.
     if (session?.role === "cswdd") keys.push("reliefDistribution");
     return Array.from(new Set(keys));
   }, [navigationItems, session?.role]);
   useEffect(() => {
-    setPresentationView(null);
     if (activePage !== "emergencyNotifications") setNotificationRequest(null);
   }, [activePage]);
 
