@@ -7,18 +7,20 @@ import styles from "./ReviewModal.module.css";
 interface ReviewModalProps {
   isOpen: boolean;
   application: VerificationApplication | null;
+  reviewNotes: string;
+  onReviewNotesChange: (value: string) => void;
   onApprove: () => void;
   onReject: () => void;
   onClose: () => void;
 }
 
-export function ReviewModal({ isOpen, application, onApprove, onReject, onClose }: ReviewModalProps) {
+export function ReviewModal({ isOpen, application, reviewNotes, onReviewNotesChange, onApprove, onReject, onClose }: ReviewModalProps) {
   const raw = application?.raw ?? {};
   const status = application?.status ?? "pending";
   const isPending = status === "pending";
   const reviewedAt = String(raw.reviewed_at ?? "");
   const reviewedBy = String(raw.reviewed_by ?? "");
-  const reviewNotes = String(raw.admin_review_notes ?? "");
+  const savedReviewNotes = String(raw.admin_review_notes ?? "");
   const title = isPending
     ? "Review Resident Application"
     : status === "approved"
@@ -52,8 +54,16 @@ export function ReviewModal({ isOpen, application, onApprove, onReject, onClose 
           <ReviewSection title="Review Details" className={styles.submission} readout fields={[
             ["Status", capitalize(status)], ["Reviewed At", reviewedAt || "N/A"], ["Reviewed By", reviewedBy || "N/A"],
           ]} />
-          <label className={styles.notes}><span>Admin Review Notes</span><textarea readOnly value={reviewNotes || "N/A"} /></label>
+          <label className={styles.notes}><span>Admin Review Notes</span><textarea readOnly value={savedReviewNotes || "N/A"} /></label>
         </> : null}
+        {isPending ? <label className={styles.notes}>
+          <span>Admin Review Notes</span>
+          <textarea
+            placeholder="Enter feedback or remarks..."
+            value={reviewNotes}
+            onChange={(event) => onReviewNotesChange(event.target.value)}
+          />
+        </label> : null}
         <footer className={styles.actions}>
           {isPending ? (
             <>

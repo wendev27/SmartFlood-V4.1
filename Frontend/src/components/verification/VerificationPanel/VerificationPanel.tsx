@@ -30,6 +30,7 @@ export function VerificationPanel({ barangayScope }: { barangayScope?: string } 
   const [isApplicationOpen, setIsApplicationOpen] = useState(false);
   const [applicationMode, setApplicationMode] = useState<ModalMode>("add");
   const [selectedApplication, setSelectedApplication] = useState<VerificationApplication | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [resultModal, setResultModal] = useState({
@@ -128,7 +129,7 @@ export function VerificationPanel({ barangayScope }: { barangayScope?: string } 
     const selectedFamilyId = selectedApplication.raw?.selected_family_id ?? selectedApplication.raw?.family_id;
     const body: Record<string, unknown> = {
       action,
-      admin_review_notes: action === "approved" ? "Approved from SmartFlood admin dashboard" : "Rejected from SmartFlood admin dashboard",
+      admin_review_notes: reviewNotes.trim() ? reviewNotes : null,
     };
     if (scopedBarangayId) body.barangay_id = scopedBarangayId;
 
@@ -155,6 +156,7 @@ export function VerificationPanel({ barangayScope }: { barangayScope?: string } 
 
     setIsReviewOpen(false);
     setSelectedApplication(null);
+    setReviewNotes("");
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.verification.applications(scopedBarangayId) }),
       queryClient.invalidateQueries({ queryKey: queryKeys.residents.list(scopedBarangayId) }),
@@ -224,6 +226,7 @@ export function VerificationPanel({ barangayScope }: { barangayScope?: string } 
             application={application}
             onReview={() => {
               setSelectedApplication(application);
+              setReviewNotes("");
               setIsReviewOpen(true);
             }}
           />
@@ -239,9 +242,14 @@ export function VerificationPanel({ barangayScope }: { barangayScope?: string } 
       <ReviewModal
         isOpen={isReviewOpen}
         application={selectedApplication}
+        reviewNotes={reviewNotes}
+        onReviewNotesChange={setReviewNotes}
         onApprove={() => reviewApplication("approved")}
         onReject={() => reviewApplication("rejected")}
-        onClose={() => setIsReviewOpen(false)}
+        onClose={() => {
+          setReviewNotes("");
+          setIsReviewOpen(false);
+        }}
       />
       <ApplicationFormModal
         isOpen={isApplicationOpen}
