@@ -3,6 +3,7 @@ import { assignedBarangayForUser, isSameBarangayForUser } from "@/lib/barangaySc
 import { logAuditEvent } from "@/lib/auditLogger";
 import { auditActorForViewer, dashboardViewerRole, getDashboardViewer, type DashboardViewer } from "@/lib/dashboardViewer";
 import { fullName, pickResidentPayload } from "@/lib/residentPayload";
+import { residentWithCurrentAge } from "@/lib/dateUtils";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const allowedPatchFields = new Set([
@@ -96,7 +97,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         barangay_id: Number(body.barangay_id),
         barangay_name: String(body.barangay_name),
       });
-      return NextResponse.json({ success: true, data: { resident } });
+      return NextResponse.json({ success: true, data: { resident: residentWithCurrentAge(resident) } });
     }
 
     const familyPayload = {
@@ -146,7 +147,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       barangay_name: String(body.barangay_name),
     });
 
-    return NextResponse.json({ success: true, data: { resident, family } });
+    return NextResponse.json({ success: true, data: { resident: residentWithCurrentAge(resident), family } });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
@@ -187,7 +188,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       barangay_id: data?.barangay_id ?? null,
       barangay_name: data?.barangay_name ?? null,
     });
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: data ? residentWithCurrentAge(data) : data });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

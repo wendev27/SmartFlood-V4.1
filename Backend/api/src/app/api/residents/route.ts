@@ -3,6 +3,7 @@ import { assignedBarangayForUser, isSameBarangayForUser } from "@/lib/barangaySc
 import { logAuditEvent } from "@/lib/auditLogger";
 import { auditActorForViewer, dashboardViewerRole, getDashboardViewer, type DashboardViewer } from "@/lib/dashboardViewer";
 import { fullName, familyVulnerabilityPayload, pickResidentPayload } from "@/lib/residentPayload";
+import { residentWithCurrentAge } from "@/lib/dateUtils";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export async function GET(req: NextRequest) {
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabaseServer
       .from("residents_v3")
-      .select("resident_id,last_name,first_name,middle_name,suffix,age,sex,contact_number,complete_address,street,barangay_id,barangay_name,is_family_head,family_id,status,created_at,updated_at")
+      .select("resident_id,application_id,last_name,first_name,middle_name,suffix,age,birth_date,sex,contact_number,complete_address,street,barangay_id,barangay_name,is_family_head,family_id,status,created_at,updated_at")
       .or("status.is.null,status.neq.inactive")
       .order("created_at", { ascending: false });
 
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
 
     if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: data?.map((resident: Record<string, unknown>) => residentWithCurrentAge(resident)) ?? [] });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         data: {
-          resident: { ...resident, family_id: family.family_id },
+          resident: residentWithCurrentAge({ ...resident, family_id: family.family_id }),
           family: { ...family, family_head_id: resident.resident_id, family_head_name: familyHeadName },
         },
       }, { status: 201 });
@@ -148,7 +149,7 @@ export async function POST(req: NextRequest) {
       barangay_name: String(body.barangay_name),
     });
 
-    return NextResponse.json({ success: true, data: { resident } }, { status: 201 });
+    return NextResponse.json({ success: true, data: { resident: residentWithCurrentAge(resident) } }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

@@ -13,14 +13,19 @@ import { Modal } from "@/components/ui/Modal/Modal";
 import { Pagination as SharedPagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
 import { getCurrentUser, type StoredSessionUser } from "@/lib/authSession";
 import { assignedBarangayForUser, barangayIdForName, isSameBarangayForUser } from "@/lib/barangayScope";
+import { createStructuredHouseholdMember, getHouseholdMemberAgePreview, isValidStructuredHouseholdMemberDraft, readStructuredHouseholdMembers } from "@/lib/householdMembers";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import { fetchJson } from "@/services/apiClient";
-import { getFamilies, getResidents } from "@/services/residentsService";
+import { getFamilies, getFamilyCoverage, getFamilyMembers, getResidents, type FamilyCoverageRow } from "@/services/residentsService";
+import { getVerificationApplication } from "@/services/verificationService";
+import type { StructuredHouseholdMember } from "@/types/householdMembers";
 import { formatBarangayName, normalizeBarangayForCompare } from "@/lib/formatters";
+import { SHOW_STRUCTURED_HOUSEHOLD_MEMBERS } from "@/lib/featureFlags";
 import styles from "./ResidentsPanel.module.css";
 
 type ResidentRow = {
   resident_id?: string;
+  application_id?: string;
   middle_name?: string;
   suffix?: string;
   first_name?: string;
@@ -34,12 +39,16 @@ type ResidentRow = {
   contact: string;
   street?: string;
   family_id?: string;
+  birth_date?: string | null;
+  age_source?: "birth_date" | "legacy" | "unavailable";
+  age_classification?: string;
   is_family_head?: boolean;
   selected?: boolean;
 };
 
 type FamilyRow = {
   family_id?: string;
+  family_head_id?: string;
   barangay_id?: number | string;
   familyName: string;
   familyHead: string;
@@ -139,6 +148,10 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
   const [isResidentModalOpen, setIsResidentModalOpen] = useState(false);
   const [residentModalMode, setResidentModalMode] = useState<"add" | "edit">("add");
   const [editingResidentId, setEditingResidentId] = useState<string | null>(null);
+  const [editingApplicationId, setEditingApplicationId] = useState<string | null>(null);
+  const [editingMemberFamilyId, setEditingMemberFamilyId] = useState<string | null>(null);
+  const [householdMemberDrafts, setHouseholdMemberDrafts] = useState<StructuredHouseholdMember[]>([]);
+  const [householdMembersAtOpen, setHouseholdMembersAtOpen] = useState<StructuredHouseholdMember[]>([]);
   const [residentForm, setResidentForm] = useState<ResidentFormState>(emptyResidentForm);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -161,6 +174,26 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
     staleTime: queryStaleTime.admin,
     enabled: canViewResidentInfo,
   });
+  const focusedFamilyId = selectedResident?.family_id ?? editingMemberFamilyId ?? selectedFamily?.family_id ?? null;
+  const familyMembersQuery = useQuery({
+    queryKey: queryKeys.residents.familyMembers(focusedFamilyId),
+    queryFn: () => getFamilyMembers(focusedFamilyId as string),
+    staleTime: queryStaleTime.admin,
+    enabled: SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && canViewResidentInfo && Boolean(focusedFamilyId),
+  });
+  const focusedApplicationId = selectedResident?.application_id ?? editingApplicationId;
+  const linkedApplicationQuery = useQuery({
+    queryKey: queryKeys.verification.application(focusedApplicationId, scopedBarangayId),
+    queryFn: () => getVerificationApplication(focusedApplicationId as string, scopedBarangayId),
+    staleTime: queryStaleTime.admin,
+    enabled: canViewResidentInfo && Boolean(focusedApplicationId),
+  });
+  const familyCoverageQuery = useQuery({
+    queryKey: queryKeys.residents.familyCoverage(scopedBarangayId),
+    queryFn: () => getFamilyCoverage(scopedBarangayId),
+    staleTime: queryStaleTime.admin,
+    enabled: SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && canViewResidentInfo,
+  });
   const residents = useMemo(
     () => filterRecordsForBarangay(filterRecordsForUser((residentsQuery.data ?? []).map(mapResident), currentUser), barangayScope),
     [barangayScope, currentUser, residentsQuery.data],
@@ -173,6 +206,17 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
   const isFamiliesLoading = familiesQuery.isPending && canViewResidentInfo;
   const residentsError = residentsQuery.error instanceof Error ? residentsQuery.error.message : residentsQuery.error ? "Unable to load residents." : "";
   const familiesError = familiesQuery.error instanceof Error ? familiesQuery.error.message : familiesQuery.error ? "Unable to load family clusters." : "";
+  const familyMembers = useMemo(
+    () => readStructuredHouseholdMembers(familyMembersQuery.data ?? []),
+    [familyMembersQuery.data],
+  );
+  const familyMembersError = familyMembersQuery.error instanceof Error ? familyMembersQuery.error.message : familyMembersQuery.error ? "Unable to load household members." : "";
+  const selectedFamilyCoverage = useMemo<FamilyCoverageRow | null>(
+    () => selectedFamily?.family_id
+      ? familyCoverageQuery.data?.families.find((row) => row.family_id === selectedFamily.family_id) ?? null
+      : null,
+    [familyCoverageQuery.data, selectedFamily],
+  );
   const refreshResidents = () => residentsQuery.refetch();
   const refreshFamilies = () => familiesQuery.refetch();
 
@@ -263,10 +307,22 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
     if (connectedResidentPage !== paginatedConnectedResidents.pagination.page) setConnectedResidentPage(paginatedConnectedResidents.pagination.page);
   }, [connectedResidentPage, paginatedConnectedResidents.pagination.page]);
 
+  useEffect(() => {
+    if (!SHOW_STRUCTURED_HOUSEHOLD_MEMBERS) return;
+    if (residentModalMode !== "edit" || !editingResidentId || !editingMemberFamilyId || !familyMembersQuery.data) return;
+    const loadedMembers = readStructuredHouseholdMembers(familyMembersQuery.data);
+    setHouseholdMemberDrafts(loadedMembers);
+    setHouseholdMembersAtOpen(loadedMembers);
+  }, [editingMemberFamilyId, editingResidentId, familyMembersQuery.data, residentModalMode]);
+
   function openAddResident() {
     if (!canManageResidentRecords) return;
     setResidentModalMode("add");
     setEditingResidentId(null);
+    setEditingApplicationId(null);
+    setEditingMemberFamilyId(null);
+    setHouseholdMemberDrafts([]);
+    setHouseholdMembersAtOpen([]);
     setResidentForm(residentFormForUser(currentUser));
     setFormError("");
     setIsResidentModalOpen(true);
@@ -290,6 +346,10 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
     const family = familyClusters.find((cluster) => cluster.family_id === resident.family_id);
     setResidentModalMode("edit");
     setEditingResidentId(resident.resident_id ?? null);
+    setEditingApplicationId(resident.application_id ?? null);
+    setEditingMemberFamilyId(resident.family_id ?? null);
+    setHouseholdMemberDrafts([]);
+    setHouseholdMembersAtOpen([]);
     setResidentForm({
       ...emptyResidentForm,
       last_name: resident.last_name ?? "",
@@ -315,6 +375,15 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
     });
     setFormError("");
     setIsResidentModalOpen(true);
+  }
+
+  function closeResidentModal() {
+    setIsResidentModalOpen(false);
+    setEditingResidentId(null);
+    setEditingApplicationId(null);
+    setEditingMemberFamilyId(null);
+    setHouseholdMemberDrafts([]);
+    setHouseholdMembersAtOpen([]);
   }
 
   function updateForm<K extends keyof ResidentFormState>(field: K, value: ResidentFormState[K]) {
@@ -371,19 +440,45 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
       return;
     }
 
+    if (
+      residentModalMode === "edit"
+      && editingMemberFamilyId
+      && residentForm.selected_family_id !== editingMemberFamilyId
+    ) {
+      setFormError("Change the resident's family cluster separately before managing household members.");
+      return;
+    }
+
+    if (SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && householdMemberDrafts.some((member) => !isValidStructuredHouseholdMemberDraft(member))) {
+      setFormError("Each household member needs valid identity, vulnerability, pregnancy-week, and birth-date values.");
+      return;
+    }
+
     const payload = buildResidentPayload(residentForm, normalizedBarangay);
     const url = residentModalMode === "edit" && editingResidentId ? `/api/residents/${editingResidentId}` : "/api/residents";
     const method = residentModalMode === "edit" ? "PATCH" : "POST";
 
     setIsSubmitting(true);
     try {
-      await fetchJson(url, {
+      const saved = await fetchJson<{ resident?: { resident_id?: string } }>(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(withAuditActor(payload)),
       });
 
+      if (SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && residentModalMode === "edit" && editingResidentId && editingMemberFamilyId) {
+        await syncFamilyMembers(editingResidentId, householdMembersAtOpen, householdMemberDrafts);
+      }
+      if (SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && residentModalMode === "add" && residentForm.is_family_head && householdMemberDrafts.length > 0) {
+        const createdResidentId = saved?.resident?.resident_id;
+        if (!createdResidentId) throw new Error("The resident was created without a resident ID, so household members could not be saved.");
+        await syncFamilyMembers(createdResidentId, [], householdMemberDrafts);
+      }
+
       setResidentForm(emptyResidentForm);
+      setEditingMemberFamilyId(null);
+      setHouseholdMemberDrafts([]);
+      setHouseholdMembersAtOpen([]);
       setIsResidentModalOpen(false);
       setResultModal({
         open: true,
@@ -397,6 +492,8 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.residents.list(scopedBarangayId) }),
         queryClient.invalidateQueries({ queryKey: ["families"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.residents.familyMembers(editingMemberFamilyId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.residents.familyCoverage(scopedBarangayId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.verification.applications(scopedBarangayId) }),
       ]);
     } catch (saveError) {
@@ -597,7 +694,7 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
       </div>
       <Modal
         isOpen={canManageResidentRecords && isResidentModalOpen}
-        onClose={() => setIsResidentModalOpen(false)}
+        onClose={closeResidentModal}
         labelledBy="resident-form-title"
         className={styles.residentDialog}
       >
@@ -606,7 +703,7 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
             <h2 id="resident-form-title">{residentModalMode === "add" ? "Add New Resident" : "Edit Resident"}</h2>
             <p>Resident Information</p>
           </div>
-          <button className={styles.closeButton} type="button" aria-label="Close resident form" onClick={() => setIsResidentModalOpen(false)}>
+          <button className={styles.closeButton} type="button" aria-label="Close resident form" onClick={closeResidentModal}>
             x
           </button>
         </header>
@@ -763,8 +860,28 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
             </section>
           )}
 
+          {residentModalMode === "edit" && editingApplicationId ? (
+            <SubmittedApplicationDetails
+              applicationId={editingApplicationId}
+              application={linkedApplicationQuery.data ?? null}
+              isLoading={linkedApplicationQuery.isPending}
+              error={linkedApplicationQuery.error instanceof Error ? linkedApplicationQuery.error.message : linkedApplicationQuery.error ? "Unable to load the submitted application." : ""}
+              variant="form"
+            />
+          ) : null}
+
+          {SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && (residentModalMode === "edit" || (residentModalMode === "add" && residentForm.is_family_head)) ? (
+            <HouseholdMemberEditor
+              members={householdMemberDrafts}
+              familyId={editingMemberFamilyId ?? (residentModalMode === "add" ? "new-family" : null)}
+              isLoading={residentModalMode === "edit" && familyMembersQuery.isPending}
+              error={residentModalMode === "edit" ? familyMembersError : ""}
+              onChange={setHouseholdMemberDrafts}
+            />
+          ) : null}
+
           <footer className={styles.formActions}>
-            <Button tone="muted" type="button" onClick={() => setIsResidentModalOpen(false)}>Cancel</Button>
+            <Button tone="muted" type="button" onClick={closeResidentModal}>Cancel</Button>
             <Button type="submit" disabled={isSubmitting || (!residentForm.is_family_head && !residentForm.selected_family_id)}>
               {isSubmitting ? "Saving..." : residentModalMode === "add" ? "Submit Resident" : "Save Changes"}
             </Button>
@@ -791,17 +908,39 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
                 <h3>Resident Details</h3>
                 <dl className={styles.detailsGrid}>
                   <Detail label="Resident ID" value={selectedResident.resident_id || "Not recorded"} />
+                  <Detail label="Source Application ID" value={selectedResident.application_id || "Not linked"} />
                   <Detail label="Full Name" value={selectedResident.name} />
                   <Detail label="Age" value={selectedResident.age || "Not recorded"} />
+                  <Detail label="Birth Date" value={selectedResident.birth_date || "Not recorded"} />
+                  <Detail label="Age Source" value={selectedResident.age_source === "birth_date" ? "Dynamic from birth date" : selectedResident.age_source === "legacy" ? "Legacy stored age" : "Unavailable"} />
+                  <Detail label="Classification" value={selectedResident.age_classification ? formatClassification(selectedResident.age_classification) : "Unavailable"} />
                   <Detail label="Sex" value={selectedResident.sex || "Not recorded"} />
                   <Detail label="Contact Number" value={selectedResident.contact || "Not recorded"} />
                   <Detail label="Barangay" value={selectedResident.barangay || "Not recorded"} />
                   <Detail label="Street" value={selectedResident.street || "Not recorded"} />
                   <Detail label="Complete Address" value={selectedResident.address || "Not recorded"} />
                   <Detail label="Family ID" value={selectedResident.family_id || "Not assigned"} />
-                  <Detail label="Family Role" value={selectedResident.is_family_head ? "Family Head" : "Family Member"} />
+                  <Detail label="Family Head" value={familyClusters.find((family) => family.family_id === selectedResident.family_id)?.familyHead || "Not available"} />
+                  <Detail label="Family Role" value={residentIsFamilyHead(selectedResident, familyClusters.find((family) => family.family_id === selectedResident.family_id)) ? "Family Head" : "Family Member"} />
                 </dl>
               </section>
+              {selectedResident.application_id ? (
+                <SubmittedApplicationDetails
+                  applicationId={selectedResident.application_id}
+                  application={linkedApplicationQuery.data ?? null}
+                  isLoading={linkedApplicationQuery.isPending}
+                  error={linkedApplicationQuery.error instanceof Error ? linkedApplicationQuery.error.message : linkedApplicationQuery.error ? "Unable to load the submitted application." : ""}
+                  variant="details"
+                />
+              ) : null}
+              {SHOW_STRUCTURED_HOUSEHOLD_MEMBERS ? (
+                <HouseholdMembersReadOnly
+                  members={familyMembers}
+                  familyId={selectedResident.family_id}
+                  isLoading={familyMembersQuery.isPending}
+                  error={familyMembersError}
+                />
+              ) : null}
             </div>
           </>
         ) : null}
@@ -841,6 +980,9 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
                   <Detail label="Infant" value={selectedFamily.infant} />
                   <Detail label="Toddler" value={selectedFamily.toddler} />
                 </dl>
+                {SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && familyCoverageQuery.isPending ? <p className={styles.coverageNote}>Checking dynamic household-member coverage…</p> : null}
+                {SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && familyCoverageQuery.error ? <p className={styles.coverageNote}>Dynamic coverage is unavailable; the existing stored aggregate values remain displayed.</p> : null}
+                {SHOW_STRUCTURED_HOUSEHOLD_MEMBERS && selectedFamilyCoverage ? <FamilyCoverageNote coverage={selectedFamilyCoverage} /> : null}
               </section>
               <section className={styles.detailsSection}>
                 <h3>Connected Residents</h3>
@@ -863,7 +1005,7 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
                           <td>{resident.age}</td>
                           <td>{resident.sex}</td>
                           <td>{resident.contact}</td>
-                          <td>{resident.is_family_head ? "Yes" : "No"}</td>
+                          <td>{residentIsFamilyHead(resident, selectedFamily) ? "Yes" : "No"}</td>
                           <td>{formatBarangayName(resident.address)}</td>
                         </tr>
                       ))}
@@ -882,6 +1024,14 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
                 </div>
                 <SharedPagination pagination={paginatedConnectedResidents.pagination} onPageChange={setConnectedResidentPage} label="Connected residents" />
               </section>
+              {SHOW_STRUCTURED_HOUSEHOLD_MEMBERS ? (
+                <HouseholdMembersReadOnly
+                  members={familyMembers}
+                  familyId={selectedFamily.family_id}
+                  isLoading={familyMembersQuery.isPending}
+                  error={familyMembersError}
+                />
+              ) : null}
             </div>
           </>
         ) : null}
@@ -897,6 +1047,354 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
         onClose={() => setResultModal((current) => ({ ...current, open: false }))}
       />
     </section>
+  );
+}
+
+async function syncFamilyMembers(
+  residentId: string,
+  originalMembers: StructuredHouseholdMember[],
+  currentMembers: StructuredHouseholdMember[],
+) {
+  const originalById = new Map(originalMembers.map((member) => [member.member_id, member]));
+  const currentById = new Map(currentMembers.map((member) => [member.member_id, member]));
+
+  for (const member of currentMembers) {
+    const original = originalById.get(member.member_id);
+    if (!original) {
+      await fetchJson(`/api/residents/${residentId}/family-members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: member.member_id,
+          full_name: member.full_name.trim(),
+          birth_date: member.birth_date,
+          is_pwd: member.is_pwd,
+          is_pregnant: member.is_pregnant,
+          pregnancy_weeks: member.pregnancy_weeks,
+          is_lactating: member.is_lactating,
+          is_4ps: member.is_4ps,
+        }),
+      });
+      continue;
+    }
+
+    if (familyMemberChanged(original, member)) {
+      await fetchJson(`/api/family-members/${member.member_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: member.full_name.trim(),
+          birth_date: member.birth_date,
+          is_pwd: member.is_pwd,
+          is_pregnant: member.is_pregnant,
+          pregnancy_weeks: member.pregnancy_weeks,
+          is_lactating: member.is_lactating,
+          is_4ps: member.is_4ps,
+        }),
+      });
+    }
+  }
+
+  for (const member of originalMembers) {
+    if (!currentById.has(member.member_id)) {
+      await fetchJson(`/api/family-members/${member.member_id}`, { method: "DELETE" });
+    }
+  }
+}
+
+function SubmittedApplicationDetails({
+  applicationId,
+  application,
+  isLoading,
+  error,
+  variant,
+}: {
+  applicationId: string;
+  application: Record<string, unknown> | null;
+  isLoading: boolean;
+  error: string;
+  variant: "form" | "details";
+}) {
+  const groups = application ? [
+    { label: "Infant", names: readSubmittedList(application.infant_full_names), birthDates: readSubmittedList(application.infant_birth_dates) },
+    { label: "Toddler", names: readSubmittedList(application.toddler_full_names), birthDates: readSubmittedList(application.toddler_birth_dates) },
+    { label: "Elderly", names: readSubmittedList(application.elderly_full_names), birthDates: readSubmittedList(application.elderly_birth_dates) },
+    { label: "PWD", names: readSubmittedList(application.pwd_full_names), birthDates: [] },
+    { label: "Pregnant", names: readSubmittedList(application.pregnant_full_names), birthDates: [] },
+    { label: "Lactating", names: readSubmittedList(application.lactating_full_names), birthDates: [] },
+    { label: "4Ps", names: readSubmittedList(application.four_ps_full_names), birthDates: [] },
+  ].filter((group) => group.names.length > 0 || group.birthDates.length > 0) : [];
+  const sectionClassName = variant === "form"
+    ? `${styles.formSection} ${styles.submittedApplicationSection}`
+    : `${styles.detailsSection} ${styles.submittedApplicationSection}`;
+
+  return (
+    <section className={sectionClassName}>
+      <h3>{variant === "form" ? <span aria-hidden="true" /> : null}Submitted Application Details</h3>
+      <p className={styles.submittedApplicationIntro}>
+        Historical application information is read-only. Legacy names and birth dates remain separate submitted lists and are never paired by array position.
+      </p>
+      {isLoading ? <LoadingState message="Loading submitted application details..." /> : null}
+      {!isLoading && error ? <p className={styles.memberErrorText}>{error}</p> : null}
+      {!isLoading && !error && !application ? (
+        <p className={styles.memberEmptyText}>The linked application ({applicationId}) is unavailable within the current barangay scope.</p>
+      ) : null}
+      {!isLoading && !error && application ? (
+        <>
+          {groups.length > 0 ? (
+            <div className={styles.submittedApplicationGroups}>
+              {groups.map((group) => (
+                <article className={styles.submittedApplicationGroup} key={group.label}>
+                  <h4>{group.label}</h4>
+                  <div className={styles.submittedApplicationColumns}>
+                    {group.names.length > 0 ? (
+                      <div>
+                        <strong>Names submitted</strong>
+                        <ul>{group.names.map((name, index) => <li key={`${group.label}-name-${index}`}>{name}</li>)}</ul>
+                      </div>
+                    ) : null}
+                    {group.birthDates.length > 0 ? (
+                      <div>
+                        <strong>Birth dates submitted</strong>
+                        <ul>{group.birthDates.map((birthDate, index) => {
+                          const preview = getHouseholdMemberAgePreview(birthDate);
+                          return (
+                            <li key={`${group.label}-birth-date-${index}`}>
+                              <b>{birthDate}</b>
+                              <span>Age: {preview.ageLabel ?? "Unavailable"}</span>
+                              <span>Classification: {preview.classification}</span>
+                            </li>
+                          );
+                        })}</ul>
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : <p className={styles.memberEmptyText}>No legacy household-member lists were submitted with this application.</p>}
+          <dl className={styles.submittedApplicationMeta}>
+            <ApplicationDetail label="Application ID" value={applicationId} />
+            <ApplicationDetail label="Date Submitted" value={String(application.created_at ?? application.submitted_at ?? "Not provided")} />
+            <ApplicationDetail label="Submitted By" value={String(application.source ?? "Not provided")} />
+            <ApplicationDetail label="Status" value={String(application.status ?? "Not provided")} />
+            <ApplicationDetail label="Reviewed At" value={String(application.reviewed_at ?? "Not reviewed")} />
+            <ApplicationDetail label="Reviewed By" value={String(application.reviewed_by ?? "N/A")} />
+            <ApplicationDetail label="Special Needs" value={String(application.special_needs ?? "N/A")} />
+            <ApplicationDetail label="Admin Review Notes" value={String(application.admin_review_notes ?? "N/A")} />
+          </dl>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function ApplicationDetail({ label, value }: { label: string; value: string }) {
+  return <div><dt>{label}</dt><dd>{value}</dd></div>;
+}
+
+function readSubmittedList(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim())
+    : [];
+}
+
+function familyMemberChanged(original: StructuredHouseholdMember, current: StructuredHouseholdMember) {
+  return original.full_name !== current.full_name
+    || original.birth_date !== current.birth_date
+    || original.is_pwd !== current.is_pwd
+    || original.is_pregnant !== current.is_pregnant
+    || original.pregnancy_weeks !== current.pregnancy_weeks
+    || original.is_lactating !== current.is_lactating
+    || original.is_4ps !== current.is_4ps;
+}
+
+function HouseholdMembersReadOnly({
+  members,
+  familyId,
+  isLoading,
+  error,
+}: {
+  members: StructuredHouseholdMember[];
+  familyId?: string;
+  isLoading: boolean;
+  error: string;
+}) {
+  return (
+    <section className={styles.detailsSection}>
+      <h3>Household Members</h3>
+      {!familyId ? <p className={styles.memberEmptyText}>This resident is not assigned to a family cluster.</p> : null}
+      {isLoading ? <LoadingState message="Loading household members..." /> : null}
+      {!isLoading && error ? <p className={styles.memberErrorText}>{error}</p> : null}
+      {!isLoading && !error && familyId && members.length === 0 ? (
+        <p className={styles.memberEmptyText}>No structured household members are recorded for this family.</p>
+      ) : null}
+      {!isLoading && !error && members.length > 0 ? (
+        <div className={cn(styles.wrap, styles.memberTableWrap)}>
+          <table className={cn(styles.table, styles.memberTable)}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Birth Date</th>
+                <th>Current Age</th>
+                <th>Classification</th>
+                <th>PWD</th>
+                <th>Pregnant</th>
+                <th>Pregnancy Weeks</th>
+                <th>Lactating</th>
+                <th>4Ps</th>
+                <th>Resident Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member) => {
+                const agePreview = getHouseholdMemberAgePreview(member.birth_date);
+                return (
+                  <tr key={member.member_id}>
+                    <td>{member.full_name}</td>
+                    <td>{member.birth_date || "Not recorded"}</td>
+                    <td>{agePreview.ageLabel ?? "Unavailable"}</td>
+                    <td>{formatClassification(member.classification)}</td>
+                    <td>{yesNo(member.is_pwd)}</td>
+                    <td>{yesNo(member.is_pregnant)}</td>
+                    <td>{member.is_pregnant ? member.pregnancy_weeks ?? "Not recorded" : "N/A"}</td>
+                    <td>{yesNo(member.is_lactating)}</td>
+                    <td>{yesNo(member.is_4ps)}</td>
+                    <td>{member.resident_id || "Not linked"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function HouseholdMemberEditor({
+  members,
+  familyId,
+  isLoading,
+  error,
+  onChange,
+}: {
+  members: StructuredHouseholdMember[];
+  familyId: string | null;
+  isLoading: boolean;
+  error: string;
+  onChange: (members: StructuredHouseholdMember[]) => void;
+}) {
+  function updateMember(memberId: string, patch: Partial<StructuredHouseholdMember>) {
+    onChange(members.map((member) => member.member_id === memberId ? { ...member, ...patch } : member));
+  }
+
+  return (
+    <section className={styles.formSection}>
+      <div className={styles.memberEditorHeading}>
+        <div>
+          <h3><span aria-hidden="true" />Household Members</h3>
+          <p className={styles.helperText}>Structured household records. Birth date is the authoritative source for current age.</p>
+        </div>
+        {familyId ? (
+          <button className={styles.addMemberButton} type="button" onClick={() => onChange([...members, createStructuredHouseholdMember()])}>
+            + Add Member
+          </button>
+        ) : null}
+      </div>
+      {!familyId ? <p className={styles.memberEmptyText}>Assign this resident to a family cluster before managing household members.</p> : null}
+      {isLoading ? <LoadingState message="Loading household members..." /> : null}
+      {!isLoading && error ? <p className={styles.memberErrorText}>{error}</p> : null}
+      {!isLoading && !error && familyId && members.length === 0 ? <p className={styles.memberEmptyText}>No structured household members yet. Use Add Member to create one.</p> : null}
+      {!isLoading && !error && members.length > 0 ? (
+        <div className={styles.memberEditorList}>
+          {members.map((member) => {
+            const agePreview = getHouseholdMemberAgePreview(member.birth_date);
+            return (
+              <article className={styles.memberEditorCard} key={member.member_id}>
+                <div className={styles.memberEditorFields}>
+                  <label>
+                    Full Name
+                    <input value={member.full_name} onChange={(event) => updateMember(member.member_id, { full_name: event.target.value })} maxLength={120} />
+                  </label>
+                  <label className={styles.memberCheckbox}>
+                    <input type="checkbox" checked={member.is_pwd} onChange={(event) => updateMember(member.member_id, { is_pwd: event.target.checked })} />
+                    PWD
+                  </label>
+                  <label className={styles.memberCheckbox}>
+                    <input
+                      type="checkbox"
+                      checked={member.is_pregnant}
+                      onChange={(event) => updateMember(member.member_id, {
+                        is_pregnant: event.target.checked,
+                        pregnancy_weeks: event.target.checked ? member.pregnancy_weeks : null,
+                      })}
+                    />
+                    Pregnant
+                  </label>
+                  <label>
+                    Pregnancy Weeks
+                    <input
+                      type="number"
+                      min="0"
+                      max="42"
+                      disabled={!member.is_pregnant}
+                      value={member.pregnancy_weeks ?? ""}
+                      onChange={(event) => updateMember(member.member_id, { pregnancy_weeks: event.target.value === "" ? null : Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className={styles.memberCheckbox}>
+                    <input type="checkbox" checked={member.is_lactating} onChange={(event) => updateMember(member.member_id, { is_lactating: event.target.checked })} />
+                    Lactating
+                  </label>
+                  <label className={styles.memberCheckbox}>
+                    <input type="checkbox" checked={member.is_4ps} onChange={(event) => updateMember(member.member_id, { is_4ps: event.target.checked })} />
+                    4Ps
+                  </label>
+                  <label>
+                    Birth Date
+                    <input
+                      type="date"
+                      value={member.birth_date ?? ""}
+                      onChange={(event) => updateMember(member.member_id, { birth_date: event.target.value || null })}
+                    />
+                  </label>
+                </div>
+                <div className={styles.memberEditorMeta}>
+                  <span>Member ID: {member.member_id}</span>
+                  <span>Current age: {agePreview.ageLabel || "Unavailable"}</span>
+                  <span>Classification: {agePreview.classification}</span>
+                  {member.resident_id ? <span>Resident link: {member.resident_id}</span> : null}
+                  <button className={styles.removeMemberButton} type="button" onClick={() => onChange(members.filter((candidate) => candidate.member_id !== member.member_id))}>
+                    Remove
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function FamilyCoverageNote({ coverage }: { coverage: FamilyCoverageRow }) {
+  if (!coverage.coverage_complete) {
+    return (
+      <div className={styles.coverageNote}>
+        <strong>Dynamic age coverage: Incomplete</strong>
+        <span>Stored vulnerability aggregates remain the displayed family values until complete member DOB coverage is available.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.coverageNote}>
+      <strong>Dynamic age coverage: Complete</strong>
+      <span>
+        Dynamic age-derived counts: {coverage.dynamic_infant_count ?? 0} infant, {coverage.dynamic_toddler_count ?? 0} toddler, {coverage.dynamic_elderly_count ?? 0} elderly.
+      </span>
+    </div>
   );
 }
 
@@ -918,12 +1416,14 @@ function mapResident(row: Record<string, unknown>): ResidentRow {
 
   return {
     resident_id: row.resident_id ? String(row.resident_id) : undefined,
+    application_id: row.application_id ? String(row.application_id) : undefined,
     first_name: firstName,
     last_name: lastName,
     middle_name: row.middle_name ? String(row.middle_name) : "",
     suffix: row.suffix ? String(row.suffix) : "",
     name: [row.first_name, row.middle_name, row.last_name, row.suffix].filter(Boolean).join(" "),
     age: String(row.age ?? ""),
+    age_classification: typeof row.age_classification === "string" ? row.age_classification : undefined,
     sex: String(row.sex ?? ""),
     address: String(row.complete_address ?? ""),
     barangay: String(row.barangay_name ?? ""),
@@ -931,6 +1431,8 @@ function mapResident(row: Record<string, unknown>): ResidentRow {
     contact: String(row.contact_number ?? ""),
     street: row.street ? String(row.street) : "",
     family_id: row.family_id ? String(row.family_id) : undefined,
+    birth_date: row.birth_date ? String(row.birth_date) : null,
+    age_source: row.age_source === "birth_date" && row.age != null ? "birth_date" : row.age_source === "legacy" ? "legacy" : "unavailable",
     is_family_head: Boolean(row.is_family_head),
   };
 }
@@ -938,6 +1440,7 @@ function mapResident(row: Record<string, unknown>): ResidentRow {
 function mapFamily(row: Record<string, unknown>): FamilyRow {
   return {
     family_id: row.family_id ? String(row.family_id) : undefined,
+    family_head_id: row.family_head_id ? String(row.family_head_id) : undefined,
     barangay_id: row.barangay_id ? String(row.barangay_id) : undefined,
     familyName: String(row.family_name ?? ""),
     familyHead: String(row.family_head_name ?? ""),
@@ -953,6 +1456,30 @@ function mapFamily(row: Record<string, unknown>): FamilyRow {
     toddler: Number(row.toddler_count ?? 0),
     totalFamilyMembers: Number(row.total_family_members ?? 0),
   };
+}
+
+function residentIsFamilyHead(resident: ResidentRow, family?: FamilyRow) {
+  if (family?.family_head_id && resident.resident_id) return family.family_head_id === resident.resident_id;
+  return Boolean(resident.is_family_head);
+}
+
+function formatClassification(value: string | undefined) {
+  switch (value?.toLowerCase()) {
+    case "infant": return "Infant";
+    case "toddler": return "Toddler";
+    case "preschool": return "Preschool / Young Child";
+    case "child": return "Child";
+    case "teen": return "Teen / Adolescent";
+    case "adult": return "Adult";
+    case "elderly": return "Senior Citizen / Elderly";
+    case "unknown":
+    case "unavailable":
+    default: return "Unavailable";
+  }
+}
+
+function yesNo(value: boolean) {
+  return value ? "Yes" : "No";
 }
 
 function matchesSearch(search: string, values: unknown[]) {

@@ -411,6 +411,37 @@ duplicate transitions. Audit actor data comes from the authenticated viewer.
 No unrelated application modules, production data, migrations, or sibling
 repositories were changed.
 
+## Dynamic Resident Age — Step 1
+
+- **Files:** Added `supabase/migrations/20260917000000_add_resident_birth_date.sql`,
+  `Backend/api/src/lib/dateUtils.ts`, and
+  `Backend/api/tests/date-utils.test.mjs`; updated
+  `Backend/api/src/lib/residentPayload.ts` and
+  `Backend/api/src/app/api/residents/route.ts`.
+- **Migration:** Adds nullable `residents_v3.birth_date` with
+  `ADD COLUMN IF NOT EXISTS`; the migration was subsequently applied and live
+  verification reports 53 residents, 31 with DOB, and 22 still NULL.
+- **Persistence:** The shared `pickResidentPayload` allowlist now includes
+  `birth_date`, so the existing family-head and non-family-head approval
+  inserts carry `resident_applications.birth_date` into `residents_v3`.
+- **Utility:** `Backend/api/src/lib/dateUtils.ts` provides
+  `calculateCurrentAge` using the current `Asia/Manila` calendar date and
+  birthday-boundary-safe calculation.
+- **Backfill:** The migration safely backfills exact approved
+  `application_id` matches with non-null source DOBs. Read-only inspection
+  identified 31 eligible rows; live verification confirms 22 remain NULL
+  because they lack a usable application/DOB relationship.
+- **Limitations:** Legacy `age` remains unchanged; no classifications,
+  family aggregates, AI/AHP logic, pregnancy/lactation logic, UI behavior,
+  authentication, or RBAC were changed. See
+  `docs/DYNAMIC_RESIDENT_AGE_STEP1.md` for the implementation handoff.
+- **Tests:** Focused date utility tests passed 3/3; backend and frontend
+  TypeScript checks passed; existing emergency tests passed 22/22; both
+  production builds passed; `git diff --check` passed.
+- **Next step:** Review and explicitly approve any future wiring of dynamic age
+  into resident displays or classifications; do not infer DOB for unmatched
+  legacy rows.
+
 ## 13. Next agent instructions
 
 1. Read this file and inspect `git status`.
@@ -422,3 +453,296 @@ repositories were changed.
    audit tests; then run authenticated E2E checks.
 7. Re-run checks and confirm emergency, QR, AI, auth, and distribution flows.
 8. Do not commit, push, or modify sibling repositories.
+
+## Dynamic Resident Age — Step 2
+
+- **Files:** Added `Backend/api/src/lib/residentPayload.ts` response helper
+  usage through the resident list/create and resident update/deactivate API
+  routes, added focused coverage to
+  `Backend/api/tests/date-utils.test.mjs`, and created
+  `docs/DYNAMIC_RESIDENT_AGE_STEP2.md`.
+- **Authoritative path:** When `residents_v3.birth_date` exists, resident API
+  responses now calculate `age` through `calculateCurrentAge()` using the
+  server-side `Asia/Manila` calendar date. Responses include
+  `age_source: "birth_date"` to make the source explicit.
+- **NULL DOB:** When `birth_date` is NULL/empty, the existing stored `age` is
+  retained only as a compatibility fallback and responses include
+  `age_source: "legacy"`. No DOBs were inferred and no stored ages were
+  mass-updated.
+- **Legacy usage:** The database column and existing resident form/update
+  contract remain unchanged. The frontend already consumes the API `age`
+  field, so no frontend source change was needed.
+- **Deferred:** AHP weights/scoring/ILP, AI aggregation, family vulnerability
+  counts, vulnerable-person classification thresholds, pregnancy/lactation,
+  PWD, 4Ps, authentication, RBAC, RLS, application workflow, QR/campaign,
+  relief, and unrelated frontend features were intentionally untouched.
+- **Validation:** Backend/frontend TypeScript checks passed; focused age tests
+  passed 5/5; emergency tests passed 22/22; backend/frontend production builds
+  passed; `git diff --check` passed.
+- **Limitations:** 22 legacy residents remain without DOB and therefore use
+  explicitly marked legacy age in responses. Step 3 should define any
+  classification-specific handling for NULL-DOB residents before changing
+  demographic or AHP consumers.
+- **Next step:** Design a separate, policy-reviewed classification adapter
+  around the authoritative dynamic-age helper; do not modify family aggregates
+  or AHP/AI logic as part of Step 2.
+
+## Dynamic Resident Age — Step 3
+
+- **Investigation:** No explicit infant, toddler, or elderly thresholds were
+  found. Existing `elderly_count`, `infant_count`, and `toddler_count` values
+  originate from family-level stored aggregates and are consumed by family
+  views and the existing AI/AHP pipeline; no individual age classifier was
+  found to redirect.
+- **Files:** Updated `Backend/api/src/lib/dateUtils.ts` and
+  `Backend/api/tests/date-utils.test.mjs`; corrected the Step 2 helper location
+  in `docs/DYNAMIC_RESIDENT_AGE_STEP2.md`; created
+  `docs/DYNAMIC_RESIDENT_AGE_STEP3.md` and this entry. No frontend source,
+  schema, family, or AI files were changed.
+- **Adapter:** `classifyCurrentAge()` accepts authoritative current age plus
+  an explicitly injected threshold policy and returns `infant`, `toddler`,
+  `elderly`, `other`, or `unknown`. `PENDING_DEMOGRAPHIC_AGE_POLICY` contains
+  no arbitrary thresholds, so unconfigured policy returns `unknown`.
+- **NULL DOB:** Missing/invalid dynamic age returns `unknown` with
+  `reason: "age_unavailable"`; the legacy stored `age` is never used as a
+  source for new classification.
+- **Unchanged:** Family aggregate counts, AHP weights/scoring/ILP, AI
+  aggregation, pregnancy/lactation/PWD/4Ps, auth/RBAC/RLS, registration,
+  database schema, and frontend behavior remain untouched.
+- **Validation:** Focused age/classification tests passed 8/8; backend and
+  frontend TypeScript checks passed; emergency tests passed 22/22; backend
+  build passed; `git diff --check` passed.
+- **Limitations:** Thresholds require explicit policy approval. No route or
+  family/AHP integration was added, and no existing aggregate was updated.
+- **Step 4 requirements:** Separately define approved thresholds and NULL-DOB
+  semantics, then integrate DOB-derived demographic counts into the existing
+  family/AHP pipeline with regression coverage. Do not implement that
+  integration as part of Step 3.
+
+## Dynamic Resident Age — Step 4
+
+- **Status:** STOPPED before AHP input changes. No Step 4 production-code,
+  schema, family aggregate, AI, AHP, or ILP changes were made.
+- **Data model:** `families` stores family-level `total_family_members`,
+  `infant_count`, `toddler_count`, and `elderly_count`; `residents_v3` rows
+  linked by `family_id` do not reliably represent every household member.
+  Approval copies application aggregates into `families`, while vulnerable
+  member DOB/name arrays are not persisted as individual resident rows.
+- **Live verification:** Read-only inspection found 53 residents and 54
+  families. Eight families have no resident rows, three have declared member
+  totals greater than resident-row coverage, and 17 have stored
+  infant/toddler/elderly totals greater than their resident-row count. Only 30
+  families have DOBs for every attached resident row.
+- **Approved policy:** Infant is 0–12 months inclusive; toddler is over 12
+  months and under 4 years; preschool is 4–6; child is 7–12;
+  teen/adolescent is 13–17; adult is 18–59; senior citizen/elderly is 60+.
+  Exactly 12 months remains infant.
+- **Stop reason:** Aggregating only `residents_v3` would silently undercount
+  existing vulnerable household members and could reduce AHP inputs. The 22
+  NULL-DOB legacy residents prevent complete authoritative classification.
+  No positional or indirect matching is acceptable.
+- **AHP status:** Existing family counts, AHP weights/scoring, AI aggregation,
+  and ILP remain unchanged. The integration was not partially implemented.
+- **Documentation:** Created `docs/DYNAMIC_RESIDENT_AGE_STEP4.md` with the
+  evidence, approved policy, stop conditions, and safe next-step design.
+- **Validation:** No code changed in Step 4, so no new code test was required;
+  prior Step 3 validation remains valid. Live inspection was read-only and
+  `git diff --check` passed.
+- **Remaining limitation:** A complete authoritative household-member model is
+  required before dynamic family counts can replace or supplement stored
+  aggregates.
+- **Exact next step:** Establish an approved member-level representation and
+  NULL-DOB preservation policy first. Then implement a separately reviewed
+  adapter that derives dynamic demographic counts only where coverage is
+  complete and preserves stored counts otherwise. Do not alter AHP until that
+  adapter is tested.
+
+## Dynamic Resident Age — Step 5
+
+- **Status:** Design/investigation only. No migration, schema, backfill,
+  family-count, AHP, AI, ILP, frontend, or workflow changes were made.
+- **Data model:** `families` stores household-level totals and vulnerability
+  aggregates. `residents_v3` stores resident/account rows linked by
+  `family_id`, but does not reliably represent every household member.
+  Family-head approval creates one resident and one family, then copies
+  aggregate counts; non-family-head approval creates one linked resident.
+- **Household-member source:** Vulnerable-member name/DOB arrays remain on
+  `resident_applications` and are not persisted as individual residents.
+  Parallel arrays may have mismatched lengths and have no stable member ID, so
+  positional or indirect matching is unsafe.
+- **Live evidence:** 53 residents, 54 families, 31 resident DOBs, and 22
+  NULL DOBs; 8 families have no resident rows, 3 exceed resident-row coverage
+  by declared total members, and 17 have stored infant/toddler/elderly totals
+  above resident-row coverage. Only 3 of 34 applications contain non-empty
+  member arrays.
+- **Safe data:** Existing resident rows can be represented deterministically
+  by `resident_id` and `family_id`, copying exact DOBs and preserving NULLs.
+  Application-only array members are incomplete/ambiguous until a stable
+  structured member identity exists.
+- **Recommended model:** A proposed normalized `family_members` table with a
+  family foreign key, optional resident link, application provenance, full
+  name, nullable DOB, timestamps, and reviewed uniqueness/RLS rules. The table
+  was not created.
+- **Compatibility:** Existing family aggregates remain authoritative for current
+  AHP behavior. Incomplete/unknown families must retain stored counts; no
+  automatic array migration or DOB inference is allowed.
+- **Future flow:** Persist structured household members after family creation,
+  derive age via `calculateCurrentAge()`, classify via `classifyCurrentAge()`,
+  calculate coverage-aware dynamic counts, compare with stored counts, then
+  separately review AHP integration. Resident accounts must not be created for
+  every household member.
+- **Documentation:** Created `docs/DYNAMIC_RESIDENT_AGE_STEP5.md` with the
+  model, safe/unsafe data classification, proposed schema, migration strategy,
+  legacy policy, and Step 6 plan.
+- **Validation:** Investigation queries were read-only; no code changed in
+  Step 5, and `git diff --check` passed. No migration was created or applied.
+- **Exact Step 6 recommendation:** Approve the member/account distinction,
+  verify schema/FK/RLS metadata, approve a stable member-key contract, then
+  implement an additive member model and coverage-preview tests before any
+  AHP input change.
+
+## Dynamic Resident Age — Step 6
+
+- **Status:** Migration created and applied. Schema-only change; no
+  backfill, live data modification, family aggregate update, AHP, AI, ILP,
+  resident workflow, or frontend change.
+- **Verified types:** Live Supabase OpenAPI metadata confirms UUID primary keys
+  for `families.family_id`, `residents_v3.resident_id`, and
+  `resident_applications.application_id`; `residents_v3.family_id` and the
+  optional application/resident links are UUID-compatible. Existing timestamps
+  use `timestamptz default now()`.
+- **Migration:** Added
+  `supabase/migrations/20260917000001_create_family_members.sql` with
+  `member_id`, required `family_id`, nullable `resident_id`, nullable
+  `source_application_id`, required `full_name`, nullable `birth_date`, and
+  created/updated timestamps. No insert/update/backfill statements exist.
+- **Foreign keys:** Family uses `ON UPDATE RESTRICT ON DELETE RESTRICT`;
+  resident and application provenance use `ON UPDATE RESTRICT ON DELETE SET
+  NULL` to preserve member history.
+- **Indexes/constraints:** Family and provenance indexes plus a partial unique
+  non-null `resident_id` index. No name/DOB uniqueness is enforced.
+- **RLS/permissions:** RLS enabled; direct `public`, `anon`, and
+  `authenticated` table access revoked/denied; existing `service_role` granted
+  table access. Dashboard authentication/RBAC and barangay scoping remain in
+  the existing server API and were not changed.
+- **Deletion/account policy:** Family deletion is restricted while members
+  exist; resident/application deletion preserves member rows through nullable
+  links. Household members do not become resident authentication accounts.
+- **Backfill:** None. Application arrays, family aggregates, legacy members,
+  and inferred identities/DOBs were intentionally not migrated.
+- **Future persistence:** The exact existing approval entry point for reviewed
+  structured member persistence is
+  `Backend/api/src/app/api/resident-applications/[id]/review/route.ts`, after
+  family identification/creation. This was documented only.
+- **Documentation:** Created `docs/DYNAMIC_RESIDENT_AGE_STEP6.md` covering
+  schema, FKs, indexes, RLS, deletion, non-backfill, Step 7, and future counts.
+- **Validation:** Backend TypeScript and production build passed; existing
+  emergency tests passed 22/22; `git diff --check` passed. A focused local
+  PostgreSQL schema test was added but requires `SF_TEST_PG_SOCKET` for an
+  isolated `/tmp` PostgreSQL instance and was not run because no such socket
+  is available; no production database was used or modified.
+- **Remaining limitation:** Step 7 must separately define safe member
+  population and incomplete-family coverage handling before any AHP
+  integration.
+- **Exact Step 7 recommendation:** Establish a stable structured household-member
+  payload and idempotency key, add server-validated persistence and a read-only
+  coverage preview, and do not backfill ambiguous arrays, infer DOBs, or
+  replace family/AHP aggregates until complete-authority and NULL-DOB policies
+  are approved and tested.
+
+## Dynamic Resident Age — Step 7
+
+- **Status:** Complete for structured member persistence and read-only coverage
+  preview. No AHP, AI, ILP, family aggregate, resident age, or new migration
+  change was made. The Step 6 migration is treated as applied in the current
+  project state.
+- **Files:** Added `Backend/api/src/lib/familyMembers.ts`,
+  `Backend/api/src/app/api/family-members/coverage/route.ts`,
+  `Backend/api/tests/family-members.test.cjs`, and
+  `docs/DYNAMIC_RESIDENT_AGE_STEP7.md`; updated the existing approval route and
+  this progress log. No frontend source changed.
+- **Contract:** Approval accepts optional `household_members[]` entries with a
+  producer-owned UUID `member_id`, trimmed 1–120 character `full_name`,
+  nullable valid/non-future `birth_date`, and optional nullable `resident_id`.
+  Family, barangay, provenance, reviewer, and authorization fields are not
+  client-trusted.
+- **Identity/idempotency:** Stable member UUIDs are reused across retries and
+  map to the existing `family_members.member_id` primary key. The server sets
+  family and application provenance, rejects cross-family/application UUID
+  conflicts, validates resident ownership, and prevents conflicting resident
+  links. Names, DOBs, and array positions are never identity keys.
+- **Persistence:** Validated records persist only during approved application
+  review. Family-head approval uses the newly created family ID; non-family-head
+  approval first verifies the selected family and application barangay match.
+  Legacy arrays and rejected applications are not persisted.
+- **Authorization:** Existing `getDashboardViewer()`, role checks,
+  `assignedBarangayForUser()`, and `isSameBarangayForUser()` remain the only
+  dashboard authorization/scoping path. No new authentication or RBAC was
+  introduced.
+- **Coverage preview:** Added read-only `GET /api/family-members/coverage`.
+  It reports stored totals, resident rows, family-member rows, DOB-known and
+  DOB-unknown counts, explicit completeness, reasons, and aggregate totals.
+  It never modifies or replaces family/AHP inputs.
+- **NULL DOB:** Missing/unusable DOB is reported as unknown and cannot make a
+  family complete. Existing stored resident age is not used as a dynamic
+  classification fallback.
+- **Database/data:** No Step 7 migration was created or applied. No backfill,
+  production data change, family aggregate change, resident age change, or
+  schema change was performed.
+- **Validation:** Backend TypeScript passed; focused date and family-member
+  tests passed; existing emergency tests passed 22/22; backend production
+  build passed; `git diff --check` passed. The local PostgreSQL schema test
+  remains available but was not run because no isolated `SF_TEST_PG_SOCKET` was
+  available.
+- **Limitations:** The current frontend does not collect structured member
+  rows, so existing UI behavior is unchanged. The current approval route's
+  pre-existing multi-write workflow was not redesigned as a transaction.
+- **Exact Step 8 recommendation:** Review the applied member table and run the
+  coverage preview, then compare dynamic age-derived counts against stored
+  aggregates while preserving stored values for incomplete/NULL-DOB families.
+  Only after policy review and regression testing should a separate task
+  consider coverage-aware AHP input adaptation.
+
+## Dynamic Resident Age — Step 8
+
+- **Status:** Complete as a read-only coverage-aware comparison. No AHP, AI,
+  ILP, relief allocation, family aggregate, resident age, authentication, RBAC,
+  frontend, migration, or database-write behavior was changed.
+- **Stored source:** The baseline columns are `families.infant_count`,
+  `families.toddler_count`, and `families.elderly_count`. Existing
+  `familyVulnerabilityPayload()` copies application/body vulnerability counts
+  into family create/update workflows; the family and AI/AHP paths continue
+  reading those stored values.
+- **Dynamic source:** Only `family_members.birth_date` is used, through the
+  existing `calculateCurrentAge()` and `classifyCurrentAge()` utilities. No
+  stored resident age, aggregate, name, array position, or inferred DOB is
+  used.
+- **Policy:** Added the explicit approved life-stage policy: infant through
+  exactly 12 months, toddler after 12 months and before 4 years, preschool
+  4–6, child 7–12, teen 13–17, adult 18–59, and elderly 60+. The first
+  birthday remains infant; the next calendar date is toddler.
+- **Coverage:** Dynamic results are produced only when the declared family
+  total is positive/valid, member rows exactly match it, every member DOB is
+  usable, resident rows do not exceed the declared total, and no supported
+  contradiction exists. Incomplete dynamic counts and differences are null.
+- **Endpoint:** Extended `GET /api/family-members/coverage` additively with
+  stored counts, dynamic counts, per-category differences, and complete-only
+  aggregate comparison totals. Existing dashboard authentication, roles, and
+  barangay scoping remain in the route.
+- **Files:** Updated `Backend/api/src/lib/dateUtils.ts`,
+  `Backend/api/src/lib/familyMembers.ts`, and
+  `Backend/api/src/app/api/family-members/coverage/route.ts`; added
+  `Backend/api/tests/family-demographic-comparison.test.cjs` and
+  `docs/DYNAMIC_RESIDENT_AGE_STEP8.md`; updated this progress log. No
+  frontend source changed.
+- **Live read-only findings:** 55 families, 54 resident rows, 0
+  `family_members` rows, 0 complete families, 47 families missing member
+  rows, and 4 with contradictory resident coverage. No production rows were
+  written or changed.
+- **Validation:** Step 8 focused tests passed 11/11; existing Step 7 family
+  member tests passed 12/12; existing date/classification tests passed 8/8;
+  backend TypeScript passed. Backend build, emergency tests, and final diff
+  checks remain required before handoff.
+- **AHP status:** Unchanged. No dynamic values are sent to the existing AHP,
+  AI, or ILP pipeline. Step 9 must first review populated member coverage and
+  then separately design/test any coverage-aware AHP adapter.

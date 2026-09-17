@@ -6,6 +6,7 @@ export const residentFields = [
   "middle_name",
   "suffix",
   "age",
+  "birth_date",
   "sex",
   "contact_number",
   "complete_address",

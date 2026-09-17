@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
 import { assignedBarangayForUser, isSameBarangayForUser } from "@/lib/barangayScope";
 import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
+import { FamilyMemberValidationError, persistStructuredHouseholdMembers, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
 import { fullName, familyVulnerabilityPayload, pickResidentPayload } from "@/lib/residentPayload";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -74,6 +75,15 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: true, data });
     }
 
+    let structuredMembers: unknown;
+    if (application.household_members !== undefined && application.household_members !== null) {
+      try {
+        structuredMembers = validateStructuredHouseholdMembers(application.household_members);
+      } catch (error) {
+        return familyMemberError(error);
+      }
+    }
+
     const residentBase = {
       ...application,
       application_id: application.application_id,
@@ -121,6 +131,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
       if (residentUpdateError) return NextResponse.json({ success: false, error: residentUpdateError.message }, { status: 500 });
 
+      if (structuredMembers !== undefined) {
+        try {
+          await persistStructuredHouseholdMembers({
+            applicationId: String(application.application_id),
+            familyId: String(family.family_id),
+            members: structuredMembers,
+          });
+        } catch (error) {
+          return familyMemberError(error);
+        }
+      }
+
       const { data: reviewedApplication, error: reviewError } = await supabaseServer
         .from("resident_applications")
         .update(reviewFields)
@@ -150,6 +172,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: false, error: "selected_family_id is required to approve a non-family-head application" }, { status: 400 });
     }
 
+    const { data: targetFamily, error: targetFamilyError } = await supabaseServer
+      .from("families")
+      .select("family_id,barangay_id,barangay_name")
+      .eq("family_id", familyId)
+      .maybeSingle();
+
+    if (targetFamilyError) return NextResponse.json({ success: false, error: targetFamilyError.message }, { status: 500 });
+    if (!targetFamily) return NextResponse.json({ success: false, error: "The selected family does not exist." }, { status: 404 });
+    if (!isSameBarangayForUser(application, targetFamily)) {
+      return NextResponse.json({ success: false, error: "The selected family is outside the application's barangay scope." }, { status: 404 });
+    }
+
     const { data: resident, error: residentError } = await supabaseServer
       .from("residents_v3")
       .insert([{ ...pickResidentPayload(residentBase, familyId), is_family_head: false }])
@@ -157,6 +191,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       .single();
 
     if (residentError) return NextResponse.json({ success: false, error: residentError.message }, { status: 500 });
+
+    if (structuredMembers !== undefined) {
+      try {
+        await persistStructuredHouseholdMembers({
+          applicationId: String(application.application_id),
+          familyId: String(targetFamily.family_id),
+          members: structuredMembers,
+        });
+      } catch (error) {
+        return familyMemberError(error);
+      }
+    }
 
     const { data: reviewedApplication, error: reviewError } = await supabaseServer
       .from("resident_applications")
@@ -182,4 +228,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   } catch (error) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
+}
+
+function familyMemberError(error: unknown) {
+  if (error instanceof FamilyMemberValidationError) {
+    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+  }
+  return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
 }
