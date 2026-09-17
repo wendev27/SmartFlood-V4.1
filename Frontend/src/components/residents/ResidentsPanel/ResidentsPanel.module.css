@@ -859,6 +859,265 @@
   white-space: nowrap;
 }
 
+.submittedApplicationSection {
+  border-top: 1px solid #e4efff;
+  padding-top: 20px;
+}
+
+.submittedApplicationIntro {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: -5px 0 14px;
+}
+
+.submittedApplicationGroups {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.submittedApplicationGroup {
+  background: #f8fbff;
+  border: 1px solid #d9e8ff;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.submittedApplicationGroup h4 {
+  color: #111827;
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.submittedApplicationColumns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.submittedApplicationColumns strong {
+  color: #64748b;
+  display: block;
+  font-size: 10px;
+  margin-bottom: 7px;
+  text-transform: uppercase;
+}
+
+.submittedApplicationColumns ul {
+  display: grid;
+  gap: 6px;
+  list-style-position: inside;
+  margin: 0;
+  padding: 0;
+}
+
+.submittedApplicationColumns li {
+  color: #1e293b;
+  font-size: 12px;
+}
+
+.submittedApplicationColumns li span {
+  color: #64748b;
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-left: 14px;
+}
+
+.submittedApplicationColumns li b {
+  font-weight: 700;
+}
+
+.submittedApplicationMeta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  margin: 14px 0 0;
+}
+
+.submittedApplicationMeta div {
+  background: #ffffff;
+  border: 1px solid #e4efff;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.submittedApplicationMeta dt {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.submittedApplicationMeta dd {
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 700px) {
+  .submittedApplicationGroups,
+  .submittedApplicationColumns,
+  .submittedApplicationMeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.memberTableWrap {
+  border: 1px solid #e4efff;
+  border-radius: 10px;
+}
+
+.memberTable {
+  min-width: 1320px;
+}
+
+.memberEmptyText,
+.memberErrorText {
+  color: #64748b;
+  font-size: 12px;
+  margin: 0;
+}
+
+.memberErrorText {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.coverageNote {
+  background: #f8fbff;
+  border: 1px solid #e4efff;
+  border-radius: 8px;
+  color: #475569;
+  display: grid;
+  font-size: 12px;
+  gap: 3px;
+  margin-top: 14px;
+  padding: 10px 12px;
+}
+
+.coverageNote strong {
+  color: #1e293b;
+}
+
+.memberEditorHeading {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.memberEditorHeading h3 {
+  margin-bottom: 5px;
+}
+
+.addMemberButton,
+.removeMemberButton {
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.addMemberButton {
+  background: #eff6ff;
+  border: 1px solid #0f61ff;
+  color: #0f61ff;
+  flex: 0 0 auto;
+}
+
+.removeMemberButton {
+  background: #fff7f7;
+  border: 1px solid #f2a3a3;
+  color: #b42318;
+  margin-left: auto;
+}
+
+.memberEditorList {
+  display: grid;
+  gap: 12px;
+}
+
+.memberEditorCard {
+  background: #f8fbff;
+  border: 1px solid #d9e8ff;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.memberEditorFields {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.memberEditorFields label {
+  color: #111827;
+  display: grid;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.memberEditorFields input {
+  background: #ffffff;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  color: #111827;
+  font-size: 12px;
+  min-height: 40px;
+  outline: 0;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.memberEditorFields input:focus {
+  border-color: #83b7ff;
+  box-shadow: 0 0 0 3px rgba(21, 93, 255, 0.12);
+}
+
+.memberEditorFields .memberCheckbox {
+  align-items: center;
+  align-self: end;
+  background: #ffffff;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: row;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.memberEditorFields .memberCheckbox input {
+  accent-color: #0966ff;
+  min-height: 0;
+  padding: 0;
+  width: 16px;
+}
+
+.memberEditorFields input:disabled {
+  background: #eef2f7;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.memberEditorMeta {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 10px 16px;
+  margin-top: 12px;
+}
+
 .panel.panel { margin-left: 0; margin-right: 0; max-width: none; width: 100%; }
 
 /* Resident Information table geometry from the web-app reference. */
