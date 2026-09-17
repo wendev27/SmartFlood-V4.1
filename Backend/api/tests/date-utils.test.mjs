@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   calculateCurrentAge,
+  calculateCurrentPregnancyWeeks,
   classifyCurrentAge,
   PENDING_DEMOGRAPHIC_AGE_POLICY,
   residentWithCurrentAge,
@@ -68,4 +69,44 @@ test("classifyCurrentAge rejects invalid injected policies", () => {
     status: "configured",
     thresholds: { infantMaxAge: 3, toddlerMaxAge: 2, elderlyMinAge: 60 },
   }), { classification: "unknown", age: 2, reason: "invalid_policy" });
+});
+
+test("calculateCurrentPregnancyWeeks advances only after complete Manila calendar weeks", () => {
+  const baseline = "2026-09-17T04:00:00.000Z";
+
+  assert.equal(calculateCurrentPregnancyWeeks(24, baseline, new Date("2026-09-17T15:59:59.000Z")), 24);
+  assert.equal(calculateCurrentPregnancyWeeks(24, baseline, new Date("2026-09-23T15:59:59.000Z")), 24);
+  assert.equal(calculateCurrentPregnancyWeeks(24, baseline, new Date("2026-09-24T04:00:00.000Z")), 25);
+  assert.equal(calculateCurrentPregnancyWeeks(24, baseline, new Date("2026-10-01T04:00:00.000Z")), 26);
+});
+
+test("calculateCurrentPregnancyWeeks uses calendar dates instead of elapsed hours", () => {
+  const lateNightBaseline = "2026-09-17T15:59:59.000Z";
+  const sevenCalendarDatesLater = new Date("2026-09-24T00:00:00.000Z");
+
+  assert.equal(calculateCurrentPregnancyWeeks(24, lateNightBaseline, sevenCalendarDatesLater), 25);
+});
+
+test("calculateCurrentPregnancyWeeks accepts zero and does not cap the derived result", () => {
+  assert.equal(calculateCurrentPregnancyWeeks(0, "2026-09-01T00:00:00.000Z", new Date("2026-09-22T00:00:00.000Z")), 3);
+  assert.equal(calculateCurrentPregnancyWeeks(42, "2026-09-01T00:00:00.000Z", new Date("2026-09-22T00:00:00.000Z")), 45);
+});
+
+test("calculateCurrentPregnancyWeeks returns unavailable for missing, invalid, or future baselines", () => {
+  const asOf = new Date("2026-09-17T04:00:00.000Z");
+
+  assert.equal(calculateCurrentPregnancyWeeks(null, "2026-09-17T00:00:00.000Z", asOf), null);
+  assert.equal(calculateCurrentPregnancyWeeks(24, null, asOf), null);
+  assert.equal(calculateCurrentPregnancyWeeks(24, "not-a-timestamp", asOf), null);
+  assert.equal(calculateCurrentPregnancyWeeks(24, "2026-09-18T00:00:00.000Z", asOf), null);
+});
+
+test("calculateCurrentPregnancyWeeks does not mutate its baseline inputs", () => {
+  const baselineDate = new Date("2026-09-17T00:00:00.000Z");
+  const baselineTime = baselineDate.getTime();
+  const baselineWeeks = 24;
+
+  assert.equal(calculateCurrentPregnancyWeeks(baselineWeeks, baselineDate, new Date("2026-09-24T00:00:00.000Z")), 25);
+  assert.equal(baselineWeeks, 24);
+  assert.equal(baselineDate.getTime(), baselineTime);
 });

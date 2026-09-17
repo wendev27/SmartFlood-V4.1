@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameBarangayForUser } from "@/lib/barangayScope";
 import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
-import { FamilyMemberValidationError, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
+import { FamilyMemberValidationError, familyMemberWithCurrentPregnancyWeeks, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const MEMBER_WRITE_ROLES = new Set(["super", "barangay"]);
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return response({ success: false, error: "This household member ID already exists." }, 409);
     }
 
+    const recordedAt = new Date();
     const { data, error } = await supabaseServer
       .from("family_members")
       .insert([{
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         is_pwd: member.is_pwd,
         is_pregnant: member.is_pregnant,
         pregnancy_weeks: member.pregnancy_weeks,
+        pregnancy_baseline_at: member.is_pregnant ? recordedAt.toISOString() : null,
         is_lactating: member.is_lactating,
         is_4ps: member.is_4ps,
       }])
@@ -73,7 +75,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       .single();
 
     if (error) return response({ success: false, error: error.message }, 500);
-    return response({ success: true, data });
+    return response({ success: true, data: familyMemberWithCurrentPregnancyWeeks(data, recordedAt) });
   } catch (error) {
     return handleError(error);
   }

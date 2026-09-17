@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameBarangayForUser } from "@/lib/barangayScope";
 import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
-import { FamilyMemberValidationError, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
+import {
+  FamilyMemberValidationError,
+  familyMemberWithCurrentPregnancyWeeks,
+  resolvePregnancyBaselineAtForUpdate,
+  validateStructuredHouseholdMembers,
+} from "@/lib/familyMembers";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const MEMBER_WRITE_ROLES = new Set(["super", "barangay"]);
@@ -29,17 +34,29 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const input = await req.json();
     if (!isRecord(input)) return response({ success: false, error: "Household member must be an object." }, 400);
+    const nextIsPregnant = input.is_pregnant ?? existing.member.is_pregnant;
     const [member] = validateStructuredHouseholdMembers([{
       member_id: existing.member.member_id,
       full_name: input.full_name ?? existing.member.full_name,
       birth_date: input.birth_date !== undefined ? input.birth_date : existing.member.birth_date,
       resident_id: existing.member.resident_id,
       is_pwd: input.is_pwd ?? existing.member.is_pwd,
-      is_pregnant: input.is_pregnant ?? existing.member.is_pregnant,
-      pregnancy_weeks: input.pregnancy_weeks !== undefined ? input.pregnancy_weeks : existing.member.pregnancy_weeks,
+      is_pregnant: nextIsPregnant,
+      pregnancy_weeks: nextIsPregnant === false
+        ? null
+        : input.pregnancy_weeks !== undefined ? input.pregnancy_weeks : existing.member.pregnancy_weeks,
       is_lactating: input.is_lactating ?? existing.member.is_lactating,
       is_4ps: input.is_4ps ?? existing.member.is_4ps,
     }]);
+    const updatedAt = new Date();
+    const pregnancyBaselineAt = resolvePregnancyBaselineAtForUpdate({
+      existingIsPregnant: existing.member.is_pregnant === true,
+      existingPregnancyWeeks: Number.isInteger(existing.member.pregnancy_weeks) ? Number(existing.member.pregnancy_weeks) : null,
+      existingPregnancyBaselineAt: existing.member.pregnancy_baseline_at,
+      nextIsPregnant: member.is_pregnant,
+      nextPregnancyWeeks: member.pregnancy_weeks,
+      now: updatedAt,
+    });
 
     const { data, error } = await supabaseServer
       .from("family_members")
@@ -49,16 +66,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         is_pwd: member.is_pwd,
         is_pregnant: member.is_pregnant,
         pregnancy_weeks: member.pregnancy_weeks,
+        pregnancy_baseline_at: pregnancyBaselineAt,
         is_lactating: member.is_lactating,
         is_4ps: member.is_4ps,
-        updated_at: new Date().toISOString(),
+        updated_at: updatedAt.toISOString(),
       })
       .eq("member_id", existing.member.member_id)
       .select()
       .single();
 
     if (error) return response({ success: false, error: error.message }, 500);
-    return response({ success: true, data });
+    return response({ success: true, data: familyMemberWithCurrentPregnancyWeeks(data, updatedAt) });
   } catch (error) {
     return handleError(error);
   }
@@ -96,7 +114,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
 async function getMember(id: string) {
   const { data, error } = await supabaseServer
     .from("family_members")
-    .select("member_id,family_id,resident_id,source_application_id,full_name,birth_date,is_pwd,is_pregnant,pregnancy_weeks,is_lactating,is_4ps")
+    .select("member_id,family_id,resident_id,source_application_id,full_name,birth_date,is_pwd,is_pregnant,pregnancy_weeks,pregnancy_baseline_at,is_lactating,is_4ps")
     .eq("member_id", id)
     .maybeSingle();
   if (error) return { member: null, error: error.message, status: 500 };

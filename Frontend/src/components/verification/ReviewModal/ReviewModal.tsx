@@ -2,7 +2,7 @@ import { Modal } from "@/components/ui/Modal/Modal";
 import { Button } from "@/components/ui/Button/Button";
 import { formatBarangayName } from "@/lib/formatters";
 import { SHOW_STRUCTURED_HOUSEHOLD_MEMBERS } from "@/lib/featureFlags";
-import { getHouseholdMemberAgePreview, readStructuredHouseholdMembers } from "@/lib/householdMembers";
+import { getHouseholdMemberAgePreview, readStructuredHouseholdMembers, readSubmittedPregnancyWeekDetails } from "@/lib/householdMembers";
 import type { StructuredHouseholdMember } from "@/types/householdMembers";
 import type { VerificationApplication } from "@/types/verification";
 import styles from "./ReviewModal.module.css";
@@ -147,7 +147,11 @@ function StructuredHouseholdMembersSection({ members }: StructuredHouseholdMembe
             <span>Classification: <b>{preview.ageLabel ? preview.classification : "Unavailable"}</b></span>
             <span>PWD: <b>{member.is_pwd ? "Yes" : "No"}</b></span>
             <span>Pregnant: <b>{member.is_pregnant ? "Yes" : "No"}</b></span>
-            {member.is_pregnant ? <span>Pregnancy Weeks: <b>{member.pregnancy_weeks ?? "Not provided"}</b></span> : null}
+            {member.is_pregnant ? <>
+              <span>Pregnancy Baseline: <b>{member.pregnancy_weeks ?? "Not provided"} weeks</b></span>
+              <span>Current Pregnancy Weeks: <b>{member.current_pregnancy_weeks ?? "Unavailable"}</b></span>
+              <span>Pregnancy Recorded: <b>{formatPregnancyDate(member.pregnancy_baseline_at)}</b></span>
+            </> : null}
             <span>Lactating: <b>{member.is_lactating ? "Yes" : "No"}</b></span>
             <span>4Ps: <b>{member.is_4ps ? "Yes" : "No"}</b></span>
             {member.resident_id ? <span>Resident Link: <b>{member.resident_id}</b></span> : null}
@@ -159,22 +163,23 @@ function StructuredHouseholdMembersSection({ members }: StructuredHouseholdMembe
 }
 
 function LegacyApplicationMemberDetails({ raw }: { raw: Record<string, unknown> }) {
+  const pregnancyWeekDetails = readSubmittedPregnancyWeekDetails(raw.legacy_pregnancy_week_details);
   const groups = [
-    { label: "Infant", names: readStringArray(raw.infant_full_names), birthDates: readStringArray(raw.infant_birth_dates) },
-    { label: "Toddler", names: readStringArray(raw.toddler_full_names), birthDates: readStringArray(raw.toddler_birth_dates) },
-    { label: "Elderly", names: readStringArray(raw.elderly_full_names), birthDates: readStringArray(raw.elderly_birth_dates) },
-    { label: "PWD", names: readStringArray(raw.pwd_full_names), birthDates: [] },
-    { label: "Pregnant", names: readStringArray(raw.pregnant_full_names), birthDates: [] },
-    { label: "Lactating", names: readStringArray(raw.lactating_full_names), birthDates: [] },
-    { label: "4Ps", names: readStringArray(raw.four_ps_full_names), birthDates: [] },
-  ].filter((group) => group.names.length > 0 || group.birthDates.length > 0);
+    { label: "Infant", names: readStringArray(raw.infant_full_names), birthDates: readStringArray(raw.infant_birth_dates), pregnancyDetails: [] },
+    { label: "Toddler", names: readStringArray(raw.toddler_full_names), birthDates: readStringArray(raw.toddler_birth_dates), pregnancyDetails: [] },
+    { label: "Elderly", names: readStringArray(raw.elderly_full_names), birthDates: readStringArray(raw.elderly_birth_dates), pregnancyDetails: [] },
+    { label: "PWD", names: readStringArray(raw.pwd_full_names), birthDates: [], pregnancyDetails: [] },
+    { label: "Pregnant", names: readStringArray(raw.pregnant_full_names), birthDates: [], pregnancyDetails: pregnancyWeekDetails },
+    { label: "Lactating", names: readStringArray(raw.lactating_full_names), birthDates: [], pregnancyDetails: [] },
+    { label: "4Ps", names: readStringArray(raw.four_ps_full_names), birthDates: [], pregnancyDetails: [] },
+  ].filter((group) => group.names.length > 0 || group.birthDates.length > 0 || group.pregnancyDetails.length > 0);
 
   if (groups.length === 0) return null;
 
   return <section className={`${styles.section} ${styles.legacyMembers}`}>
     <h3>Submitted Member Details</h3>
     <p className={styles.legacyIntro}>
-      Legacy application names and birth dates are displayed as separate submitted lists. They are not paired or converted into structured member identities.
+      Legacy application names, birth dates, and pregnancy weeks are displayed as separate submitted lists. They are not paired or converted into structured member identities.
     </p>
     <div className={styles.legacyGroups}>
       {groups.map((group) => <div className={styles.legacyGroup} key={group.label}>
@@ -189,6 +194,14 @@ function LegacyApplicationMemberDetails({ raw }: { raw: Record<string, unknown> 
               <span className={styles.submittedAge}>Classification: {preview.ageLabel ? preview.classification : "Unavailable"}</span>
             </li>;
           })}</ul></div> : null}
+          {group.pregnancyDetails.length > 0 ? <div>
+            <span>Pregnancy weeks submitted</span>
+            <ul>{group.pregnancyDetails.map((detail, index) => <li key={`pregnancy-week-${index}`}>
+              <span className={styles.submittedDate}>Baseline: {formatSubmittedWeeks(detail.pregnancy_weeks)}</span>
+              <span className={styles.submittedAge}>Current: {detail.current_pregnancy_weeks == null ? "Unavailable" : `${detail.current_pregnancy_weeks} weeks`}</span>
+              <span className={styles.submittedAge}>Registered: {formatPregnancyDate(detail.pregnancy_baseline_at)}</span>
+            </li>)}</ul>
+          </div> : null}
         </div>
       </div>)}
     </div>
@@ -203,4 +216,20 @@ function readStringArray(value: unknown): string[] {
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatSubmittedWeeks(value: unknown) {
+  return Number.isInteger(value) && Number(value) >= 0 ? `${Number(value)} weeks` : "Invalid or unavailable";
+}
+
+function formatPregnancyDate(value: string | null | undefined) {
+  if (!value) return "Unavailable";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Unavailable";
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isSameBarangayForUser } from "@/lib/barangayScope";
 import { APPROVED_DEMOGRAPHIC_AGE_POLICY, calculateCurrentAge, classifyCurrentAge } from "@/lib/dateUtils";
 import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
+import { familyMemberWithCurrentPregnancyWeeks } from "@/lib/familyMembers";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const MEMBER_READ_ROLES = new Set(["super", "cswdd", "barangay"]);
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabaseServer
       .from("family_members")
-      .select("member_id,family_id,resident_id,source_application_id,full_name,birth_date,is_pwd,is_pregnant,pregnancy_weeks,is_lactating,is_4ps,created_at,updated_at")
+      .select("member_id,family_id,resident_id,source_application_id,full_name,birth_date,is_pwd,is_pregnant,pregnancy_weeks,pregnancy_baseline_at,is_lactating,is_4ps,created_at,updated_at")
       .eq("family_id", familyId)
       .order("created_at", { ascending: true });
 
@@ -48,12 +49,12 @@ export async function GET(req: NextRequest) {
         birthDate: birthDate ?? undefined,
         asOf,
       });
-      return {
+      return familyMemberWithCurrentPregnancyWeeks({
         ...member,
         current_age: currentAge,
         age_source: birthDate && currentAge !== null ? "birth_date" : "unavailable",
         classification: classification.classification,
-      };
+      }, asOf);
     });
     return response({ success: true, data: enrichedMembers });
   } catch (error) {

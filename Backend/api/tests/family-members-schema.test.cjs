@@ -60,15 +60,17 @@ test('supports nullable resident, source application, and birth date fields', ()
 
 test('existing rows receive safe vulnerability defaults without inferred statuses', () => {
   assert.equal(
-    query(`select is_pwd || ',' || is_pregnant || ',' || coalesce(pregnancy_weeks::text, 'NULL') || ',' || is_lactating || ',' || is_4ps from family_members where full_name='Unlinked Member'`),
-    'false,false,NULL,false,false',
+    query(`select is_pwd || ',' || is_pregnant || ',' || coalesce(pregnancy_weeks::text, 'NULL') || ',' || coalesce(pregnancy_baseline_at::text, 'NULL') || ',' || is_lactating || ',' || is_4ps from family_members where full_name='Unlinked Member'`),
+    'false,false,NULL,NULL,false,false',
   );
 });
 
 test('enforces member pregnancy-week integrity', () => {
-  query(`insert into family_members(family_id, full_name, is_pregnant, pregnancy_weeks) values(${sql(familyId)}, 'Pregnant Member', true, 24)`);
+  query(`insert into family_members(family_id, full_name, is_pregnant, pregnancy_weeks, pregnancy_baseline_at) values(${sql(familyId)}, 'Pregnant Member', true, 24, '2026-09-17T04:00:00Z')`);
+  assert.throws(() => query(`insert into family_members(family_id, full_name, is_pregnant, pregnancy_weeks) values(${sql(familyId)}, 'Missing Baseline', true, 24)`));
+  assert.throws(() => query(`insert into family_members(family_id, full_name, is_pregnant, pregnancy_weeks, pregnancy_baseline_at) values(${sql(familyId)}, 'Missing Weeks', true, NULL, '2026-09-17T04:00:00Z')`));
   assert.throws(() => query(`insert into family_members(family_id, full_name, pregnancy_weeks) values(${sql(familyId)}, 'Invalid Weeks', 12)`));
-  assert.throws(() => query(`insert into family_members(family_id, full_name, is_pregnant, pregnancy_weeks) values(${sql(familyId)}, 'Too Many Weeks', true, 43)`));
+  assert.throws(() => query(`insert into family_members(family_id, full_name, is_pregnant, pregnancy_weeks, pregnancy_baseline_at) values(${sql(familyId)}, 'Too Many Weeks', true, 43, '2026-09-17T04:00:00Z')`));
 });
 
 test('stores a structured application snapshot without changing legacy columns', () => {

@@ -53,9 +53,14 @@ paired by position.
 1. Review and manually apply
    `20260917000002_add_family_member_vulnerabilities.sql` to the active
    Supabase project.
-2. Verify the five `family_members` vulnerability columns and
-   `resident_applications.household_members` exist.
+2. Verify the `family_members` vulnerability columns,
+   `pregnancy_baseline_at`, and `resident_applications.household_members`
+   exist.
 3. Verify the family-member GET/POST/PATCH/DELETE routes in a controlled test.
 4. Change `SHOW_STRUCTURED_HOUSEHOLD_MEMBERS` to `true`.
 5. Run frontend/backend typechecks, builds, focused family-member tests, and
    `git diff --check` before deployment.
+
+The hidden structured panels already support dynamic pregnancy-week display.
+They must not be restored until the baseline timestamp column and pregnancy
+integrity constraint from migration `00002` are present in the active schema.

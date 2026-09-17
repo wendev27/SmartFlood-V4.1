@@ -8,6 +8,8 @@ export interface StructuredHouseholdMember {
   is_pwd: boolean;
   is_pregnant: boolean;
   pregnancy_weeks: number | null;
+  pregnancy_baseline_at?: string | null;
+  current_pregnancy_weeks?: number | null;
   is_lactating: boolean;
   is_4ps: boolean;
   current_age?: number | null;

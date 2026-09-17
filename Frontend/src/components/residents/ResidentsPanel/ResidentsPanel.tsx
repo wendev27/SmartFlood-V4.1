@@ -13,7 +13,7 @@ import { Modal } from "@/components/ui/Modal/Modal";
 import { Pagination as SharedPagination, type PaginationState } from "@/components/ui/Pagination/Pagination";
 import { getCurrentUser, type StoredSessionUser } from "@/lib/authSession";
 import { assignedBarangayForUser, barangayIdForName, isSameBarangayForUser } from "@/lib/barangayScope";
-import { createStructuredHouseholdMember, getHouseholdMemberAgePreview, isValidStructuredHouseholdMemberDraft, readStructuredHouseholdMembers } from "@/lib/householdMembers";
+import { createStructuredHouseholdMember, getHouseholdMemberAgePreview, isValidStructuredHouseholdMemberDraft, readStructuredHouseholdMembers, readSubmittedPregnancyWeekDetails } from "@/lib/householdMembers";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import { fetchJson } from "@/services/apiClient";
 import { getFamilies, getFamilyCoverage, getFamilyMembers, getResidents, type FamilyCoverageRow } from "@/services/residentsService";
@@ -1115,15 +1115,16 @@ function SubmittedApplicationDetails({
   error: string;
   variant: "form" | "details";
 }) {
+  const pregnancyWeekDetails = application ? readSubmittedPregnancyWeekDetails(application.legacy_pregnancy_week_details) : [];
   const groups = application ? [
-    { label: "Infant", names: readSubmittedList(application.infant_full_names), birthDates: readSubmittedList(application.infant_birth_dates) },
-    { label: "Toddler", names: readSubmittedList(application.toddler_full_names), birthDates: readSubmittedList(application.toddler_birth_dates) },
-    { label: "Elderly", names: readSubmittedList(application.elderly_full_names), birthDates: readSubmittedList(application.elderly_birth_dates) },
-    { label: "PWD", names: readSubmittedList(application.pwd_full_names), birthDates: [] },
-    { label: "Pregnant", names: readSubmittedList(application.pregnant_full_names), birthDates: [] },
-    { label: "Lactating", names: readSubmittedList(application.lactating_full_names), birthDates: [] },
-    { label: "4Ps", names: readSubmittedList(application.four_ps_full_names), birthDates: [] },
-  ].filter((group) => group.names.length > 0 || group.birthDates.length > 0) : [];
+    { label: "Infant", names: readSubmittedList(application.infant_full_names), birthDates: readSubmittedList(application.infant_birth_dates), pregnancyDetails: [] },
+    { label: "Toddler", names: readSubmittedList(application.toddler_full_names), birthDates: readSubmittedList(application.toddler_birth_dates), pregnancyDetails: [] },
+    { label: "Elderly", names: readSubmittedList(application.elderly_full_names), birthDates: readSubmittedList(application.elderly_birth_dates), pregnancyDetails: [] },
+    { label: "PWD", names: readSubmittedList(application.pwd_full_names), birthDates: [], pregnancyDetails: [] },
+    { label: "Pregnant", names: readSubmittedList(application.pregnant_full_names), birthDates: [], pregnancyDetails: pregnancyWeekDetails },
+    { label: "Lactating", names: readSubmittedList(application.lactating_full_names), birthDates: [], pregnancyDetails: [] },
+    { label: "4Ps", names: readSubmittedList(application.four_ps_full_names), birthDates: [], pregnancyDetails: [] },
+  ].filter((group) => group.names.length > 0 || group.birthDates.length > 0 || group.pregnancyDetails.length > 0) : [];
   const sectionClassName = variant === "form"
     ? `${styles.formSection} ${styles.submittedApplicationSection}`
     : `${styles.detailsSection} ${styles.submittedApplicationSection}`;
@@ -1132,7 +1133,7 @@ function SubmittedApplicationDetails({
     <section className={sectionClassName}>
       <h3>{variant === "form" ? <span aria-hidden="true" /> : null}Submitted Application Details</h3>
       <p className={styles.submittedApplicationIntro}>
-        Historical application information is read-only. Legacy names and birth dates remain separate submitted lists and are never paired by array position.
+        Historical application information is read-only. Legacy names, birth dates, and pregnancy weeks remain separate submitted lists and are never paired by array position.
       </p>
       {isLoading ? <LoadingState message="Loading submitted application details..." /> : null}
       {!isLoading && error ? <p className={styles.memberErrorText}>{error}</p> : null}
@@ -1168,6 +1169,18 @@ function SubmittedApplicationDetails({
                         })}</ul>
                       </div>
                     ) : null}
+                    {group.pregnancyDetails.length > 0 ? (
+                      <div>
+                        <strong>Pregnancy weeks submitted</strong>
+                        <ul>{group.pregnancyDetails.map((detail, index) => (
+                          <li key={`pregnancy-week-${index}`}>
+                            <b>Baseline: {formatSubmittedPregnancyWeeks(detail.pregnancy_weeks)}</b>
+                            <span>Current: {detail.current_pregnancy_weeks == null ? "Unavailable" : `${detail.current_pregnancy_weeks} weeks`}</span>
+                            <span>Registered: {formatPregnancyBaselineDate(detail.pregnancy_baseline_at)}</span>
+                          </li>
+                        ))}</ul>
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               ))}
@@ -1175,7 +1188,7 @@ function SubmittedApplicationDetails({
           ) : <p className={styles.memberEmptyText}>No legacy household-member lists were submitted with this application.</p>}
           <dl className={styles.submittedApplicationMeta}>
             <ApplicationDetail label="Application ID" value={applicationId} />
-            <ApplicationDetail label="Date Submitted" value={String(application.created_at ?? application.submitted_at ?? "Not provided")} />
+            <ApplicationDetail label="Date Submitted" value={String(application.submitted_at ?? application.created_at ?? "Not provided")} />
             <ApplicationDetail label="Submitted By" value={String(application.source ?? "Not provided")} />
             <ApplicationDetail label="Status" value={String(application.status ?? "Not provided")} />
             <ApplicationDetail label="Reviewed At" value={String(application.reviewed_at ?? "Not reviewed")} />
@@ -1240,7 +1253,9 @@ function HouseholdMembersReadOnly({
                 <th>Classification</th>
                 <th>PWD</th>
                 <th>Pregnant</th>
-                <th>Pregnancy Weeks</th>
+                <th>Baseline Weeks</th>
+                <th>Current Pregnancy Weeks</th>
+                <th>Pregnancy Recorded</th>
                 <th>Lactating</th>
                 <th>4Ps</th>
                 <th>Resident Link</th>
@@ -1258,6 +1273,8 @@ function HouseholdMembersReadOnly({
                     <td>{yesNo(member.is_pwd)}</td>
                     <td>{yesNo(member.is_pregnant)}</td>
                     <td>{member.is_pregnant ? member.pregnancy_weeks ?? "Not recorded" : "N/A"}</td>
+                    <td>{member.is_pregnant ? member.current_pregnancy_weeks ?? "Unavailable" : "N/A"}</td>
+                    <td>{member.is_pregnant ? formatPregnancyBaselineDate(member.pregnancy_baseline_at) : "N/A"}</td>
                     <td>{yesNo(member.is_lactating)}</td>
                     <td>{yesNo(member.is_4ps)}</td>
                     <td>{member.resident_id || "Not linked"}</td>
@@ -1333,7 +1350,7 @@ function HouseholdMemberEditor({
                     Pregnant
                   </label>
                   <label>
-                    Pregnancy Weeks
+                    Pregnancy Weeks at Baseline
                     <input
                       type="number"
                       min="0"
@@ -1364,6 +1381,8 @@ function HouseholdMemberEditor({
                   <span>Member ID: {member.member_id}</span>
                   <span>Current age: {agePreview.ageLabel || "Unavailable"}</span>
                   <span>Classification: {agePreview.classification}</span>
+                  {member.is_pregnant ? <span>Current pregnancy weeks: {member.current_pregnancy_weeks ?? "Unavailable"}</span> : null}
+                  {member.is_pregnant ? <span>Pregnancy recorded: {formatPregnancyBaselineDate(member.pregnancy_baseline_at)}</span> : null}
                   {member.resident_id ? <span>Resident link: {member.resident_id}</span> : null}
                   <button className={styles.removeMemberButton} type="button" onClick={() => onChange(members.filter((candidate) => candidate.member_id !== member.member_id))}>
                     Remove
@@ -1480,6 +1499,22 @@ function formatClassification(value: string | undefined) {
 
 function yesNo(value: boolean) {
   return value ? "Yes" : "No";
+}
+
+function formatSubmittedPregnancyWeeks(value: unknown) {
+  return Number.isInteger(value) && Number(value) >= 0 ? `${Number(value)} weeks` : "Invalid or unavailable";
+}
+
+function formatPregnancyBaselineDate(value: string | null | undefined) {
+  if (!value) return "Unavailable";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Unavailable";
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(parsed);
 }
 
 function matchesSearch(search: string, values: unknown[]) {

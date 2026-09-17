@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auditActorFromBody, logAuditEvent } from "@/lib/auditLogger";
 import { assignedBarangayForUser, isSameBarangayForUser } from "@/lib/barangayScope";
 import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
-import { FamilyMemberValidationError, persistStructuredHouseholdMembers, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
+import {
+  FamilyMemberValidationError,
+  persistStructuredHouseholdMembers,
+  pregnancyBaselineAtForMembers,
+  validateStructuredHouseholdMembers,
+} from "@/lib/familyMembers";
 import { fullName, familyVulnerabilityPayload, pickResidentPayload } from "@/lib/residentPayload";
 import { supabaseServer } from "@/lib/supabaseServer";
 
@@ -75,10 +80,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: true, data });
     }
 
-    let structuredMembers: unknown;
+    let structuredMembers: ReturnType<typeof validateStructuredHouseholdMembers> | undefined;
+    let structuredPregnancyBaselineAt: string | null = null;
     if (application.household_members !== undefined && application.household_members !== null) {
       try {
         structuredMembers = validateStructuredHouseholdMembers(application.household_members);
+        structuredPregnancyBaselineAt = pregnancyBaselineAtForMembers(structuredMembers, application.submitted_at);
       } catch (error) {
         return familyMemberError(error);
       }
@@ -137,6 +144,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
             applicationId: String(application.application_id),
             familyId: String(family.family_id),
             members: structuredMembers,
+            pregnancyBaselineAt: structuredPregnancyBaselineAt,
           });
         } catch (error) {
           return familyMemberError(error);
@@ -198,6 +206,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
           applicationId: String(application.application_id),
           familyId: String(targetFamily.family_id),
           members: structuredMembers,
+          pregnancyBaselineAt: structuredPregnancyBaselineAt,
         });
       } catch (error) {
         return familyMemberError(error);

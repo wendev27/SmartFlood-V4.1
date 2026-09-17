@@ -1,6 +1,7 @@
 import {
   APPROVED_DEMOGRAPHIC_AGE_POLICY,
   calculateCurrentAge,
+  calculateCurrentPregnancyWeeks,
   classifyCurrentAge,
   type DemographicAgePolicy,
 } from "@/lib/dateUtils";
@@ -35,6 +36,7 @@ export type FamilyMemberValidationErrorCode =
   | "duplicate_resident_id"
   | "invalid_vulnerability_flag"
   | "invalid_pregnancy_weeks"
+  | "invalid_pregnancy_baseline_at"
   | "resident_not_found"
   | "resident_family_mismatch"
   | "member_identity_conflict";
@@ -192,14 +194,17 @@ export async function persistStructuredHouseholdMembers({
   applicationId,
   familyId,
   members,
+  pregnancyBaselineAt,
 }: {
   client?: any;
   applicationId: string;
   familyId: string;
   members: unknown;
+  pregnancyBaselineAt: unknown;
 }) {
   const validatedMembers = validateStructuredHouseholdMembers(members);
   if (validatedMembers.length === 0) return [];
+  const normalizedPregnancyBaselineAt = pregnancyBaselineAtForMembers(validatedMembers, pregnancyBaselineAt);
 
   const residentIds = validatedMembers
     .map((member) => member.resident_id)
@@ -284,6 +289,7 @@ export async function persistStructuredHouseholdMembers({
     is_pwd: member.is_pwd,
     is_pregnant: member.is_pregnant,
     pregnancy_weeks: member.pregnancy_weeks,
+    pregnancy_baseline_at: member.is_pregnant ? normalizedPregnancyBaselineAt : null,
     is_lactating: member.is_lactating,
     is_4ps: member.is_4ps,
     updated_at: new Date().toISOString(),
@@ -296,6 +302,99 @@ export async function persistStructuredHouseholdMembers({
 
   if (error) throw error;
   return data ?? [];
+}
+
+export function pregnancyBaselineAtForMembers(
+  members: ReadonlyArray<StructuredHouseholdMember>,
+  pregnancyBaselineAt: unknown,
+  asOf = new Date(),
+): string | null {
+  if (!members.some((member) => member.is_pregnant)) return null;
+
+  const normalized = normalizePregnancyBaselineAt(pregnancyBaselineAt, asOf);
+  if (!normalized) {
+    throw new FamilyMemberValidationError(
+      "Pregnant household members require a valid, non-future application submitted_at timestamp.",
+      "invalid_pregnancy_baseline_at",
+    );
+  }
+  return normalized;
+}
+
+export function resolvePregnancyBaselineAtForUpdate({
+  existingIsPregnant,
+  existingPregnancyWeeks,
+  existingPregnancyBaselineAt,
+  nextIsPregnant,
+  nextPregnancyWeeks,
+  now = new Date(),
+}: Readonly<{
+  existingIsPregnant: boolean;
+  existingPregnancyWeeks: number | null;
+  existingPregnancyBaselineAt: unknown;
+  nextIsPregnant: boolean;
+  nextPregnancyWeeks: number | null;
+  now?: Date;
+}>): string | null {
+  if (!nextIsPregnant) return null;
+
+  if (!existingIsPregnant || existingPregnancyWeeks !== nextPregnancyWeeks) {
+    return now.toISOString();
+  }
+
+  const normalized = normalizePregnancyBaselineAt(existingPregnancyBaselineAt, now);
+  if (!normalized) {
+    throw new FamilyMemberValidationError(
+      "The existing pregnant household member has no valid pregnancy baseline timestamp.",
+      "invalid_pregnancy_baseline_at",
+    );
+  }
+  return normalized;
+}
+
+export function familyMemberWithCurrentPregnancyWeeks<T extends Record<string, unknown>>(
+  member: T,
+  asOf = new Date(),
+) {
+  const currentPregnancyWeeks = member.is_pregnant === true
+    ? calculateCurrentPregnancyWeeks(member.pregnancy_weeks, member.pregnancy_baseline_at, asOf)
+    : null;
+
+  return {
+    ...member,
+    current_pregnancy_weeks: currentPregnancyWeeks,
+  };
+}
+
+export function residentApplicationWithCurrentPregnancyWeeks<T extends Record<string, unknown>>(
+  application: T,
+  asOf = new Date(),
+) {
+  const baselineAt = application.submitted_at;
+  const householdMembers = Array.isArray(application.household_members)
+    ? application.household_members.map((value) => {
+      if (!isRecord(value)) return value;
+      const pregnancyBaselineAt = value.is_pregnant === true ? baselineAt ?? null : null;
+      return familyMemberWithCurrentPregnancyWeeks({
+        ...value,
+        pregnancy_baseline_at: pregnancyBaselineAt,
+      }, asOf);
+    })
+    : application.household_members;
+
+  const legacyPregnancyWeekDetails = Array.isArray(application.pregnancy_weeks)
+    ? application.pregnancy_weeks.map((pregnancyWeeks) => ({
+      pregnancy_weeks: pregnancyWeeks,
+      pregnancy_baseline_at: baselineAt ?? null,
+      current_pregnancy_weeks: calculateCurrentPregnancyWeeks(pregnancyWeeks, baselineAt, asOf),
+    }))
+    : [];
+
+  return {
+    ...application,
+    household_members: householdMembers,
+    legacy_pregnancy_week_details: legacyPregnancyWeekDetails,
+  };
 }
 
 export function buildFamilyCoveragePreview(
@@ -541,14 +640,21 @@ function readRequiredBoolean(value: unknown, index: number, field: string) {
 }
 
 function readPregnancyWeeks(value: unknown, isPregnant: boolean, index: number) {
-  if (value == null || value === "") return null;
+  if (!isPregnant && (value == null || value === "")) return null;
   if (!isPregnant || !Number.isInteger(value) || Number(value) < 0 || Number(value) > MAX_PREGNANCY_WEEKS) {
     throw new FamilyMemberValidationError(
-      `household_members[${index}].pregnancy_weeks must be null unless pregnant, or an integer from 0 to ${MAX_PREGNANCY_WEEKS}.`,
+      `household_members[${index}].pregnancy_weeks must be null when not pregnant, or a required integer from 0 to ${MAX_PREGNANCY_WEEKS} when pregnant.`,
       "invalid_pregnancy_weeks",
     );
   }
   return Number(value);
+}
+
+function normalizePregnancyBaselineAt(value: unknown, asOf: Date) {
+  if (!(value instanceof Date) && (typeof value !== "string" || value.trim().length === 0)) return null;
+  const parsed = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return calculateCurrentPregnancyWeeks(0, parsed, asOf) === null ? null : parsed.toISOString();
 }
 
 function hasControlCharacters(value: string) {

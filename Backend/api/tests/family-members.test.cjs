@@ -16,7 +16,10 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 const {
   FamilyMemberValidationError,
   buildFamilyCoveragePreview,
+  familyMemberWithCurrentPregnancyWeeks,
   persistStructuredHouseholdMembers,
+  residentApplicationWithCurrentPregnancyWeeks,
+  resolvePregnancyBaselineAtForUpdate,
   validateStructuredHouseholdMembers,
 } = require('@/lib/familyMembers');
 const { classifyCurrentAge, residentWithCurrentAge } = require('@/lib/dateUtils');
@@ -109,6 +112,7 @@ test('vulnerability flags and pregnancy weeks are explicit and validated', () =>
   assert.equal(member.pregnancy_weeks, 24);
   rejectsCode(() => validateStructuredHouseholdMembers([validMember({ is_pwd: 'yes' })]), 'invalid_vulnerability_flag');
   rejectsCode(() => validateStructuredHouseholdMembers([validMember({ pregnancy_weeks: 4 })]), 'invalid_pregnancy_weeks');
+  rejectsCode(() => validateStructuredHouseholdMembers([validMember({ is_pregnant: true, pregnancy_weeks: null })]), 'invalid_pregnancy_weeks');
   rejectsCode(() => validateStructuredHouseholdMembers([validMember({ is_pregnant: true, pregnancy_weeks: 43 })]), 'invalid_pregnancy_weeks');
 });
 
@@ -173,6 +177,128 @@ test('stable member IDs make repeated persistence idempotent', async () => {
   await persistStructuredHouseholdMembers({ client, applicationId, familyId, members: [validMember()] });
   await persistStructuredHouseholdMembers({ client, applicationId, familyId, members: [validMember()] });
   assert.equal(client.rows.members.length, 1);
+});
+
+test('application persistence records submitted_at as the pregnancy baseline', async () => {
+  const client = fakeClient();
+  const submittedAt = '2026-09-17T04:00:00.000Z';
+  const [row] = await persistStructuredHouseholdMembers({
+    client,
+    applicationId,
+    familyId,
+    pregnancyBaselineAt: submittedAt,
+    members: [validMember({ is_pregnant: true, pregnancy_weeks: 24 })],
+  });
+
+  assert.equal(row.pregnancy_weeks, 24);
+  assert.equal(row.pregnancy_baseline_at, submittedAt);
+  assert.equal(row.source_application_id, applicationId);
+});
+
+test('pregnant application persistence rejects a missing baseline timestamp', async () => {
+  await assert.rejects(
+    persistStructuredHouseholdMembers({
+      client: fakeClient(),
+      applicationId,
+      familyId,
+      pregnancyBaselineAt: null,
+      members: [validMember({ is_pregnant: true, pregnancy_weeks: 24 })],
+    }),
+    error => error.code === 'invalid_pregnancy_baseline_at',
+  );
+});
+
+test('pregnancy response exposure requires an active pregnancy and valid baseline', () => {
+  const asOf = new Date('2026-09-24T04:00:00.000Z');
+  const active = familyMemberWithCurrentPregnancyWeeks({
+    is_pregnant: true,
+    pregnancy_weeks: 24,
+    pregnancy_baseline_at: '2026-09-17T04:00:00.000Z',
+  }, asOf);
+  const inactive = familyMemberWithCurrentPregnancyWeeks({
+    is_pregnant: false,
+    pregnancy_weeks: 24,
+    pregnancy_baseline_at: '2026-09-17T04:00:00.000Z',
+  }, asOf);
+
+  assert.equal(active.current_pregnancy_weeks, 25);
+  assert.equal(inactive.current_pregnancy_weeks, null);
+});
+
+test('application responses derive structured and legacy pregnancy values from submitted_at without pairing names', () => {
+  const response = residentApplicationWithCurrentPregnancyWeeks({
+    submitted_at: '2026-09-17T04:00:00.000Z',
+    pregnant_full_names: ['Submitted Name'],
+    pregnancy_weeks: [24, 10],
+    household_members: [validMember({ is_pregnant: true, pregnancy_weeks: 24 })],
+  }, new Date('2026-09-24T04:00:00.000Z'));
+
+  assert.deepEqual(response.pregnant_full_names, ['Submitted Name']);
+  assert.equal(response.household_members[0].pregnancy_baseline_at, '2026-09-17T04:00:00.000Z');
+  assert.equal(response.household_members[0].current_pregnancy_weeks, 25);
+  assert.equal(response.legacy_pregnancy_week_details.length, 2);
+  assert.equal(response.legacy_pregnancy_week_details[0].current_pregnancy_weeks, 25);
+  assert.equal(response.legacy_pregnancy_week_details[1].current_pregnancy_weeks, 11);
+  assert.equal('full_name' in response.legacy_pregnancy_week_details[0], false);
+});
+
+test('unrelated edits preserve pregnancy_baseline_at', () => {
+  const baselineAt = '2026-09-17T04:00:00.000Z';
+  const result = resolvePregnancyBaselineAtForUpdate({
+    existingIsPregnant: true,
+    existingPregnancyWeeks: 24,
+    existingPregnancyBaselineAt: baselineAt,
+    nextIsPregnant: true,
+    nextPregnancyWeeks: 24,
+    now: new Date('2026-09-20T04:00:00.000Z'),
+  });
+
+  assert.equal(result, baselineAt);
+});
+
+test('explicit pregnancy week edits reset the baseline to the server timestamp', () => {
+  const now = new Date('2026-09-20T04:00:00.000Z');
+  const result = resolvePregnancyBaselineAtForUpdate({
+    existingIsPregnant: true,
+    existingPregnancyWeeks: 24,
+    existingPregnancyBaselineAt: '2026-09-17T04:00:00.000Z',
+    nextIsPregnant: true,
+    nextPregnancyWeeks: 25,
+    now,
+  });
+
+  assert.equal(result, now.toISOString());
+});
+
+test('disabling pregnancy clears the baseline timestamp', () => {
+  const result = resolvePregnancyBaselineAtForUpdate({
+    existingIsPregnant: true,
+    existingPregnancyWeeks: 24,
+    existingPregnancyBaselineAt: '2026-09-17T04:00:00.000Z',
+    nextIsPregnant: false,
+    nextPregnancyWeeks: null,
+  });
+
+  assert.equal(result, null);
+});
+
+test('approval route passes resident_applications.submitted_at to persistence', () => {
+  const route = fs.readFileSync(path.resolve(__dirname, '../src/app/api/resident-applications/[id]/review/route.ts'), 'utf8');
+
+  assert.match(route, /pregnancyBaselineAtForMembers\(structuredMembers, application\.submitted_at\)/);
+  assert.match(route, /pregnancyBaselineAt: structuredPregnancyBaselineAt/);
+  assert.doesNotMatch(route, /pregnancyBaselineAtForMembers\(structuredMembers, application\.created_at\)/);
+});
+
+test('manual creation and member updates keep pregnancy timestamps server-owned', () => {
+  const createRoute = fs.readFileSync(path.resolve(__dirname, '../src/app/api/residents/[id]/family-members/route.ts'), 'utf8');
+  const updateRoute = fs.readFileSync(path.resolve(__dirname, '../src/app/api/family-members/[id]/route.ts'), 'utf8');
+
+  assert.match(createRoute, /const recordedAt = new Date\(\)/);
+  assert.match(createRoute, /pregnancy_baseline_at: member\.is_pregnant \? recordedAt\.toISOString\(\) : null/);
+  assert.doesNotMatch(createRoute, /input\.pregnancy_baseline_at/);
+  assert.match(updateRoute, /resolvePregnancyBaselineAtForUpdate/);
+  assert.doesNotMatch(updateRoute, /input\.current_pregnancy_weeks/);
 });
 
 test('same name and birth date remain valid for distinct member IDs', async () => {

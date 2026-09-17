@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auditActorFromBody, logAuditEvent, withoutAuditActor } from "@/lib/auditLogger";
 import { assignedBarangayForUser } from "@/lib/barangayScope";
 import { dashboardViewerRole, getDashboardViewer } from "@/lib/dashboardViewer";
-import { FamilyMemberValidationError, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
+import { FamilyMemberValidationError, residentApplicationWithCurrentPregnancyWeeks, validateStructuredHouseholdMembers } from "@/lib/familyMembers";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,7 +34,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data });
+    const asOf = new Date();
+    return NextResponse.json({
+      success: true,
+      data: (data ?? []).map((application: Record<string, unknown>) => residentApplicationWithCurrentPregnancyWeeks(application, asOf)),
+    });
   } catch (error) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }

@@ -96,6 +96,25 @@ export function calculateCurrentAge(birthDate: string | Date, asOf = new Date())
 }
 
 /**
+ * Adds complete Manila calendar weeks elapsed to a stored pregnancy baseline.
+ * The baseline remains unchanged; this function only derives a response value.
+ */
+export function calculateCurrentPregnancyWeeks(
+  baselineWeeks: unknown,
+  pregnancyBaselineAt: unknown,
+  currentDate = new Date(),
+): number | null {
+  if (!Number.isInteger(baselineWeeks) || Number(baselineWeeks) < 0) return null;
+
+  const baselineDate = parseTimestampCalendarDate(pregnancyBaselineAt, RESIDENT_DATE_TIME_ZONE);
+  const today = calendarDateInTimeZone(currentDate, RESIDENT_DATE_TIME_ZONE);
+  if (!baselineDate || !today || compareCalendarDates(baselineDate, today) > 0) return null;
+
+  const elapsedDays = calendarDayNumber(today) - calendarDayNumber(baselineDate);
+  return Number(baselineWeeks) + Math.floor(elapsedDays / 7);
+}
+
+/**
  * Maps an authoritative current age to a demographic class using an explicitly
  * supplied policy. Legacy stored age values must not be passed here as a
  * substitute for dynamically verified age.
@@ -274,4 +293,19 @@ function calendarDateInTimeZone(value: Date, timeZone: string): CalendarDate | n
   return Number.isInteger(year) && Number.isInteger(month) && Number.isInteger(day)
     ? { year, month, day }
     : null;
+}
+
+function parseTimestampCalendarDate(value: unknown, timeZone: string): CalendarDate | null {
+  if (value instanceof Date) return calendarDateInTimeZone(value, timeZone);
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+
+  const dateOnly = parseBirthDate(value.trim());
+  if (dateOnly) return dateOnly;
+
+  const parsed = new Date(value);
+  return calendarDateInTimeZone(parsed, timeZone);
+}
+
+function calendarDayNumber(value: CalendarDate) {
+  return Math.floor(Date.UTC(value.year, value.month - 1, value.day) / 86_400_000);
 }

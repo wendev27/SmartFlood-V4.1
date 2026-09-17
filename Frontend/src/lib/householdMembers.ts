@@ -18,6 +18,12 @@ export interface HouseholdMemberAgePreview {
   classification: HouseholdMemberClassification | "Unavailable";
 }
 
+export interface SubmittedPregnancyWeekDetail {
+  pregnancy_weeks: unknown;
+  pregnancy_baseline_at: string | null;
+  current_pregnancy_weeks: number | null;
+}
+
 export function createStructuredHouseholdMember(): StructuredHouseholdMember {
   return {
     member_id: globalThis.crypto.randomUUID(),
@@ -27,6 +33,8 @@ export function createStructuredHouseholdMember(): StructuredHouseholdMember {
     is_pwd: false,
     is_pregnant: false,
     pregnancy_weeks: null,
+    pregnancy_baseline_at: null,
+    current_pregnancy_weeks: null,
     is_lactating: false,
     is_4ps: false,
   };
@@ -42,8 +50,12 @@ export function isValidStructuredHouseholdMemberDraft(member: StructuredHousehol
     && typeof member.is_pregnant === "boolean"
     && typeof member.is_lactating === "boolean"
     && typeof member.is_4ps === "boolean"
-    && (member.pregnancy_weeks === null
-      || (member.is_pregnant && Number.isInteger(member.pregnancy_weeks) && member.pregnancy_weeks >= 0 && member.pregnancy_weeks <= 42));
+    && ((!member.is_pregnant && member.pregnancy_weeks === null)
+      || (member.is_pregnant
+        && member.pregnancy_weeks !== null
+        && Number.isInteger(member.pregnancy_weeks)
+        && member.pregnancy_weeks >= 0
+        && member.pregnancy_weeks <= 42));
 }
 
 /**
@@ -63,6 +75,8 @@ export function readStructuredHouseholdMembers(value: unknown): StructuredHouseh
     const familyId = candidate.family_id;
     const sourceApplicationId = candidate.source_application_id;
     const pregnancyWeeks = candidate.pregnancy_weeks;
+    const pregnancyBaselineAt = candidate.pregnancy_baseline_at;
+    const currentPregnancyWeeks = candidate.current_pregnancy_weeks;
 
     if (
       typeof memberId !== "string"
@@ -77,8 +91,12 @@ export function readStructuredHouseholdMembers(value: unknown): StructuredHouseh
       || typeof candidate.is_pregnant !== "boolean"
       || typeof candidate.is_lactating !== "boolean"
       || typeof candidate.is_4ps !== "boolean"
-      || (pregnancyWeeks !== null && pregnancyWeeks !== undefined
-        && (!candidate.is_pregnant || !Number.isInteger(pregnancyWeeks) || Number(pregnancyWeeks) < 0 || Number(pregnancyWeeks) > 42))
+      || (candidate.is_pregnant
+        ? !Number.isInteger(pregnancyWeeks) || Number(pregnancyWeeks) < 0 || Number(pregnancyWeeks) > 42
+        : pregnancyWeeks !== null && pregnancyWeeks !== undefined)
+      || (pregnancyBaselineAt !== null && pregnancyBaselineAt !== undefined && typeof pregnancyBaselineAt !== "string")
+      || (currentPregnancyWeeks !== null && currentPregnancyWeeks !== undefined
+        && (!Number.isInteger(currentPregnancyWeeks) || Number(currentPregnancyWeeks) < 0))
     ) {
       return [];
     }
@@ -93,11 +111,28 @@ export function readStructuredHouseholdMembers(value: unknown): StructuredHouseh
       is_pwd: candidate.is_pwd,
       is_pregnant: candidate.is_pregnant,
       pregnancy_weeks: pregnancyWeeks == null ? null : Number(pregnancyWeeks),
+      pregnancy_baseline_at: typeof pregnancyBaselineAt === "string" ? pregnancyBaselineAt : null,
+      current_pregnancy_weeks: Number.isInteger(currentPregnancyWeeks) ? Number(currentPregnancyWeeks) : null,
       is_lactating: candidate.is_lactating,
       is_4ps: candidate.is_4ps,
       current_age: Number.isInteger(candidate.current_age) ? Number(candidate.current_age) : null,
       age_source: candidate.age_source === "birth_date" ? "birth_date" : "unavailable",
       classification: typeof candidate.classification === "string" ? candidate.classification : "unknown",
+    }];
+  });
+}
+
+export function readSubmittedPregnancyWeekDetails(value: unknown): SubmittedPregnancyWeekDetail[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((candidate) => {
+    if (!isRecord(candidate)) return [];
+    const baselineAt = candidate.pregnancy_baseline_at;
+    const currentWeeks = candidate.current_pregnancy_weeks;
+    return [{
+      pregnancy_weeks: candidate.pregnancy_weeks,
+      pregnancy_baseline_at: typeof baselineAt === "string" ? baselineAt : null,
+      current_pregnancy_weeks: Number.isInteger(currentWeeks) && Number(currentWeeks) >= 0 ? Number(currentWeeks) : null,
     }];
   });
 }

@@ -746,3 +746,30 @@ repositories were changed.
 - **AHP status:** Unchanged. No dynamic values are sent to the existing AHP,
   AI, or ILP pipeline. Step 9 must first review populated member coverage and
   then separately design/test any coverage-aware AHP adapter.
+
+## Dynamic Pregnancy Weeks
+
+- **Model:** `family_members.pregnancy_weeks` remains the stored baseline.
+  The extended, still-unapplied migration `00002` adds nullable
+  `pregnancy_baseline_at timestamptz` and enforces that pregnant members have
+  both values while non-pregnant members have neither.
+- **Dynamic calculation:** `calculateCurrentPregnancyWeeks()` adds complete
+  Asia/Manila calendar weeks since the baseline date. It returns null for
+  missing, invalid, or future baselines and never caps or stores the result.
+- **Writes:** Application approval uses only
+  `resident_applications.submitted_at`; manual RBI member creation uses the
+  server recording time. Unrelated member edits preserve the baseline
+  timestamp, baseline-week changes reset it to server time, and disabling
+  pregnancy clears both fields.
+- **Responses/UI:** Structured member responses expose baseline weeks,
+  baseline timestamp, and `current_pregnancy_weeks`. Accounts and RBI display
+  code distinguishes baseline from current values. Legacy pregnancy names
+  and week arrays remain separate read-only lists and are never paired.
+- **Deployment state:** Migration `00002` was extended but not applied. The
+  structured household-member feature flag remains disabled, so its Accounts
+  and RBI panels remain hidden and issue no incompatible live-schema calls.
+- **Data:** No backfill, production row update, migration application, or
+  controlled synthetic approval was performed. The controlled test remains
+  blocked until the migration is manually applied and the feature is restored.
+- **Unchanged:** Family `pregnant_count`, AHP, AI, ILP, relief, flood logic,
+  DOB/age behavior, authentication, RBAC, and barangay scoping.

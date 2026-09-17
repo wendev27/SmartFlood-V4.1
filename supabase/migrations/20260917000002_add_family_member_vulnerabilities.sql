@@ -6,24 +6,30 @@ ALTER TABLE public.family_members
   ADD COLUMN IF NOT EXISTS is_pwd boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS is_pregnant boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS pregnancy_weeks smallint NULL,
+  ADD COLUMN IF NOT EXISTS pregnancy_baseline_at timestamptz NULL,
   ADD COLUMN IF NOT EXISTS is_lactating boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS is_4ps boolean NOT NULL DEFAULT false;
 
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'family_members_pregnancy_weeks_check'
-      AND conrelid = 'public.family_members'::regclass
-  ) THEN
-    ALTER TABLE public.family_members
-      ADD CONSTRAINT family_members_pregnancy_weeks_check
-      CHECK (
-        (NOT is_pregnant AND pregnancy_weeks IS NULL)
-        OR (is_pregnant AND (pregnancy_weeks IS NULL OR pregnancy_weeks BETWEEN 0 AND 42))
-      );
-  END IF;
+  ALTER TABLE public.family_members
+    DROP CONSTRAINT IF EXISTS family_members_pregnancy_weeks_check;
+
+  ALTER TABLE public.family_members
+    ADD CONSTRAINT family_members_pregnancy_weeks_check
+    CHECK (
+      (
+        NOT is_pregnant
+        AND pregnancy_weeks IS NULL
+        AND pregnancy_baseline_at IS NULL
+      )
+      OR (
+        is_pregnant
+        AND pregnancy_weeks IS NOT NULL
+        AND pregnancy_weeks BETWEEN 0 AND 42
+        AND pregnancy_baseline_at IS NOT NULL
+      )
+    );
 END
 $$;
 
