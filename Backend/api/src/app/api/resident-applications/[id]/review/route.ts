@@ -82,6 +82,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     let structuredMembers: ReturnType<typeof validateStructuredHouseholdMembers> | undefined;
     let structuredPregnancyBaselineAt: string | null = null;
+    // Approval consumes only the validated structured snapshot. Historical
+    // parallel name/date arrays remain display-only because array positions do
+    // not establish member identity.
     if (application.household_members !== undefined && application.household_members !== null) {
       try {
         structuredMembers = validateStructuredHouseholdMembers(application.household_members);
@@ -139,6 +142,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (residentUpdateError) return NextResponse.json({ success: false, error: residentUpdateError.message }, { status: 500 });
 
       if (structuredMembers !== undefined) {
+        // Persist members only after the server has created the authoritative
+        // family ID; client-supplied family provenance is never trusted.
         try {
           await persistStructuredHouseholdMembers({
             applicationId: String(application.application_id),

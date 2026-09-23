@@ -41,6 +41,8 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: true });
 
     if (error) return response({ success: false, error: error.message }, 500);
+    // Use one request timestamp so age, classification, and pregnancy weeks in
+    // the response share the same temporal boundary.
     const asOf = new Date();
     const enrichedMembers = (data ?? []).map((member: Record<string, unknown>) => {
       const birthDate = typeof member.birth_date === "string" ? member.birth_date : null;

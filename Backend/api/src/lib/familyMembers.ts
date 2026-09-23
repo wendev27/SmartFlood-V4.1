@@ -202,6 +202,9 @@ export async function persistStructuredHouseholdMembers({
   members: unknown;
   pregnancyBaselineAt: unknown;
 }) {
+  // Identity and provenance are validated before upsert. The route supplies
+  // trusted family/application IDs; legacy parallel name/DOB arrays are never
+  // positionally paired or converted here.
   const validatedMembers = validateStructuredHouseholdMembers(members);
   if (validatedMembers.length === 0) return [];
   const normalizedPregnancyBaselineAt = pregnancyBaselineAtForMembers(validatedMembers, pregnancyBaselineAt);
@@ -338,6 +341,8 @@ export function resolvePregnancyBaselineAtForUpdate({
 }>): string | null {
   if (!nextIsPregnant) return null;
 
+  // Starting pregnancy tracking or explicitly changing baseline weeks starts a
+  // new baseline. Unrelated edits preserve the prior timestamp.
   if (!existingIsPregnant || existingPregnancyWeeks !== nextPregnancyWeeks) {
     return now.toISOString();
   }
@@ -356,6 +361,8 @@ export function familyMemberWithCurrentPregnancyWeeks<T extends Record<string, u
   member: T,
   asOf = new Date(),
 ) {
+  // Enrich API output only. The stored baseline fields are not rewritten as
+  // weeks pass, and non-pregnant members expose no active current value.
   const currentPregnancyWeeks = member.is_pregnant === true
     ? calculateCurrentPregnancyWeeks(member.pregnancy_weeks, member.pregnancy_baseline_at, asOf)
     : null;
@@ -370,6 +377,8 @@ export function residentApplicationWithCurrentPregnancyWeeks<T extends Record<st
   application: T,
   asOf = new Date(),
 ) {
+  // submitted_at is the immutable baseline date for pregnancy weeks captured
+  // with an application, including read-only legacy week entries.
   const baselineAt = application.submitted_at;
   const householdMembers = Array.isArray(application.household_members)
     ? application.household_members.map((value) => {
@@ -469,6 +478,8 @@ export function buildFamilyDemographicComparison(
   families: FamilyDemographicComparisonRow[];
   summary: FamilyDemographicComparisonSummary;
 } {
+  // Dynamic age counts are previewed only for coverage-complete families.
+  // This comparison never overwrites the aggregate fields consumed by AHP.
   const coverage = buildFamilyCoveragePreview(families, residents, members);
   const membersByFamily = groupByFamily(members);
   const familyById = new Map(families.map((family) => [String(family.family_id ?? ""), family]));

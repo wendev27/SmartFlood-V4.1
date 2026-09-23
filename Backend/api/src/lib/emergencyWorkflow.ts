@@ -126,6 +126,9 @@ export async function createAcceptedWorkflowBatch(
 ): Promise<WorkflowBatchResponse> {
   const now = new Date().toISOString();
   const actor = auditActorForViewer(viewer);
+  // The rendered QR contains this opaque bearer token, never resident or
+  // family PII. Store a hash for lookup and an encrypted copy only so an
+  // authorized barangay user can retrieve and display the campaign QR later.
   const qrToken = randomBytes(32).toString("base64url");
   const qrTokenHash = createHash("sha256").update(qrToken, "utf8").digest("hex");
   const qrTokenEncrypted = encryptCampaignQrToken(qrToken);

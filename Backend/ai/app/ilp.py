@@ -34,6 +34,9 @@ RESOURCE_CATEGORIES = (
     },
 )
 
+# Each profile changes both the severity/vulnerability objective coefficients
+# and the fraction of demand made available to the solver. This is what makes
+# the three strategies produce potentially different, reviewable allocations.
 OPTIMIZATION_PROFILES = (
     {
         "plan_id": "severity_first",
@@ -87,6 +90,8 @@ class ResourceResult:
 
 
 def build_optimization_plans(scored: list[dict[str, Any]], inventory: dict[str, int]) -> list[dict[str, Any]]:
+    # Build one independent ILP per resource category and strategy, then merge
+    # the solved whole-unit quantities into a plan for each barangay.
     if not scored:
         raise OptimizationError("No barangays are available for optimization.")
     _validate_demographic_demand(scored)
@@ -200,6 +205,9 @@ def _solve_resource_allocation(
     if effective_supply == 0:
         return ResourceResult(allocation_key, public_allocation_key, effective_supply, 0.0, {item["key"]: 0 for item in scored}, demands, "ZeroSupply")
 
+    # Decision variable x(resource, barangay) is an integer bounded by that
+    # barangay's demand. The objective maximizes the sum of
+    # priority_coefficient * allocated_units under the effective supply cap.
     problem = LpProblem(f"smartflood_{category_id}", LpMaximize)
     variables = {
         item["key"]: LpVariable(f"x_{category_id}_{item['key']}", lowBound=0, upBound=demands[item["key"]], cat=LpInteger)
@@ -232,6 +240,8 @@ def _solve_resource_allocation(
 
 
 def _effective_supply(available_supply: int, total_demand: int, coverage_target: float) -> int:
+    # A strategy deliberately optimizes only its configured coverage share,
+    # capped by both physical inventory and total recorded demand.
     if available_supply <= 0 or total_demand <= 0:
         return 0
     bounded_target = min(1.0, max(0.0, coverage_target))
@@ -245,6 +255,9 @@ def _validate_demographic_demand(scored: list[dict[str, Any]]) -> None:
 
 
 def _profile_priority(item: dict[str, Any], *, severity_weight: float, vulnerability_weight: float) -> float:
+    # Profile priority combines crisp flood severity with the AHP-inspired
+    # demographic score and household population. It becomes the ILP objective
+    # coefficient; it is not itself an allocation quantity.
     severity_component = _risk_weight(str(item.get("risk_level"))) * 100
     vulnerability_component = (
         float(item.get("ahp_breakdown", {}).get("total_vulnerability_score", 0))

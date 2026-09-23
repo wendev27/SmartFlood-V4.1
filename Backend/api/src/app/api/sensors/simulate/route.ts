@@ -1,15 +1,22 @@
+import { ObjectId, type Document } from "mongodb";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/mongodb";
+import { getFloodStatusClass } from "@/lib/statusStyles";
+import { advanceSyntheticWaterLevel, elapsedSimulationHours } from "@/lib/sensorSimulation";
 
-const SIMULATED_SENSOR_IDS = new Set(["SNS-002", "SNS-003"]);
 const SIMULATION_MODES = ["no_reading", "normal", "flood_alert", "flood_warning", "severe"] as const;
-
 type SimulationMode = (typeof SIMULATION_MODES)[number];
 
 type SensorSimulation = {
   sensorId: string;
-  mode: SimulationMode;
   active: boolean;
+  mode?: SimulationMode;
+  currentRainMmHr?: number;
+  rainfallMm?: number;
+  forecastPrecipitationProbability?: number | null;
+  precipitationProbability?: number | null;
+  weatherProvider?: string;
+  weatherObservedAt?: string;
 };
 
 type ReadingPreset = {
@@ -27,96 +34,107 @@ const READING_PRESETS: Record<Exclude<SimulationMode, "no_reading">, ReadingPres
 
 export async function POST(req: NextRequest) {
   try {
-    const body: unknown = await req.json();
-    const simulations = parseSimulations(body);
+    const simulations = parseSimulations(await req.json());
     const db = await getDb();
-    const sensors = db.collection<{ _id: string }>("sensors");
+    const sensors = db.collection("sensors");
     const readings = db.collection("sensor_readings");
+    const resolvedSensors = new Map<string, { sensor: Document; identifiers: string[] }>();
 
     for (const simulation of simulations) {
-      const sensor = await sensors.findOne({ _id: simulation.sensorId });
-
+      const clauses: Document[] = [
+        { _id: simulation.sensorId },
+        { sensorId: simulation.sensorId },
+        { sensor_id: simulation.sensorId },
+      ];
+      if (ObjectId.isValid(simulation.sensorId)) clauses.push({ _id: new ObjectId(simulation.sensorId) });
+      const sensor = await sensors.findOne({ $or: clauses });
       if (!sensor) {
-        return NextResponse.json(
-          { success: false, error: `Sensor ${simulation.sensorId} was not found.` },
-          { status: 404 },
-        );
+        return NextResponse.json({ success: false, error: "Sensor " + simulation.sensorId + " was not found." }, { status: 404 });
       }
+      resolvedSensors.set(simulation.sensorId, { sensor, identifiers: sensorIdentifiers(sensor, simulation.sensorId) });
     }
 
     const data = [];
-
     for (const simulation of simulations) {
       const now = new Date();
+      const resolved = resolvedSensors.get(simulation.sensorId);
+      if (!resolved) continue;
+      const filter = { _id: resolved.sensor._id };
+      const identifiers = resolved.identifiers;
+
       if (!simulation.active) {
-        await sensors.updateOne(
-          { _id: simulation.sensorId },
-          { $set: { status: "inactive", updatedAt: now } },
-        );
-        data.push({
-          sensorId: simulation.sensorId,
-          active: false,
-          mode: simulation.mode,
-          status: "inactive",
-          waterLevelM: null,
-        });
+        await sensors.updateOne(filter, { $set: { status: "inactive", updatedAt: now } });
+        data.push({ sensorId: simulation.sensorId, active: false, mode: simulation.mode ?? "weather-aware", status: "inactive", waterLevelM: null });
         continue;
       }
 
-      await sensors.updateOne(
-        { _id: simulation.sensorId },
-        { $set: { status: "active", lastSeenAt: now, updatedAt: now } },
-      );
+      await sensors.updateOne(filter, { $set: { status: "active", lastSeenAt: now, updatedAt: now } });
 
       if (simulation.mode === "no_reading") {
-        await readings.deleteMany({ sensorId: simulation.sensorId });
-        data.push({
-          sensorId: simulation.sensorId,
-          active: true,
-          mode: simulation.mode,
-          status: "no_reading",
-          waterLevelM: null,
-        });
+        await readings.deleteMany({ sensorId: { $in: identifiers } });
+        data.push({ sensorId: simulation.sensorId, active: true, mode: simulation.mode, status: "no_reading", waterLevelM: null });
         continue;
       }
 
-      const preset = READING_PRESETS[simulation.mode];
-      const waterLevelM = randomWaterLevel(preset);
+      const preset = simulation.mode ? READING_PRESETS[simulation.mode] : null;
+      const previous = preset ? null : await readings.findOne({ sensorId: { $in: identifiers } }, { sort: { createdAt: -1 } });
+      const hasPreviousReading = Boolean(previous);
+      const previousWaterLevelM = numberValue(previous?.waterLevelM ?? previous?.waterLevel) ?? 0;
+      const currentRainMmHr = simulation.currentRainMmHr ?? simulation.rainfallMm ?? 0;
+      const elapsedHours = preset ? 0 : elapsedSimulationHours(previous?.createdAt, now);
+      const waterLevelM = preset ? randomWaterLevel(preset) : advanceSyntheticWaterLevel(previousWaterLevelM, currentRainMmHr, elapsedHours, hasPreviousReading);
+      const status = preset?.status ?? getFloodStatusClass(undefined, waterLevelM);
       const distanceCm = Math.max(30, Math.round((220 - waterLevelM * 100) * 100) / 100);
+
       await readings.insertOne({
-        sensorId: simulation.sensorId,
+        sensorId: identifiers[0],
         waterLevelM,
         waterLevel: waterLevelM,
         distanceCm,
-        rainfallMm: null,
+        rainfallMm: currentRainMmHr,
+        currentRainMmHr,
+        rainfallMmHr: currentRainMmHr,
+        forecastPrecipitationProbability: simulation.forecastPrecipitationProbability ?? null,
+        weatherProvider: simulation.weatherProvider ?? null,
+        weatherObservedAt: simulation.weatherObservedAt ? new Date(simulation.weatherObservedAt) : null,
         batteryPct: null,
-        computedStatus: preset.status,
-        status: preset.status,
-        source: "manual-simulator",
+        computedStatus: status,
+        status,
+        source: preset ? "manual-simulator" : "weather-aware-simulator",
+        simulated: true,
         createdAt: now,
         updatedAt: now,
         __v: 0,
       });
+
       data.push({
         sensorId: simulation.sensorId,
         active: true,
-        mode: simulation.mode,
-        status: preset.status,
+        mode: simulation.mode ?? "weather-aware",
+        status,
         waterLevelM,
+        rainfallMm: currentRainMmHr,
+        currentRainMmHr,
+        weatherProvider: simulation.weatherProvider ?? null,
+        weatherObservedAt: simulation.weatherObservedAt ?? null,
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Sensor simulation applied.",
-      data,
-    });
+    return NextResponse.json({ success: true, message: "Sensor simulation applied.", data });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unable to apply sensor simulation.";
     const status = error instanceof SimulationRequestError ? 400 : 500;
-
     return NextResponse.json({ success: false, error: message }, { status });
   }
+}
+
+function sensorIdentifiers(sensor: Document, requestedId: string) {
+  return [...new Set([
+    requestedId,
+    String(sensor.sensorId ?? ""),
+    String(sensor.sensor_id ?? ""),
+    String(sensor._id ?? ""),
+  ].filter(Boolean))];
 }
 
 function randomWaterLevel(preset: ReadingPreset) {
@@ -125,42 +143,59 @@ function randomWaterLevel(preset: ReadingPreset) {
 }
 
 function parseSimulations(body: unknown): SensorSimulation[] {
-  if (!isRecord(body) || !Array.isArray(body.sensors) || body.sensors.length === 0) {
-    throw new SimulationRequestError("Request body must include a non-empty sensors array.");
-  }
-
+  if (!isRecord(body)) throw new SimulationRequestError("Request body must be a sensor simulation object.");
+  const entries = Array.isArray(body.sensors) ? body.sensors : [body];
+  if (entries.length === 0) throw new SimulationRequestError("Request must include at least one sensor.");
   const seenSensorIds = new Set<string>();
 
-  return body.sensors.map((entry, index) => {
-    if (!isRecord(entry)) {
-      throw new SimulationRequestError(`Sensor entry at index ${index} must be an object.`);
-    }
-
-    const sensorId = typeof entry.sensorId === "string" ? entry.sensorId.trim().toUpperCase() : "";
-    if (!SIMULATED_SENSOR_IDS.has(sensorId)) {
-      throw new SimulationRequestError(`Sensor ${sensorId || `at index ${index}`} is not supported by this simulator.`);
-    }
-
-    if (seenSensorIds.has(sensorId)) {
-      throw new SimulationRequestError(`Sensor ${sensorId} was included more than once.`);
-    }
+  return entries.map((entry, index) => {
+    if (!isRecord(entry)) throw new SimulationRequestError("Sensor entry at index " + index + " must be an object.");
+    const sensorId = typeof entry.sensorId === "string" ? entry.sensorId.trim() : "";
+    if (!sensorId) throw new SimulationRequestError("Sensor entry at index " + index + " is missing sensorId.");
+    if (seenSensorIds.has(sensorId)) throw new SimulationRequestError("Sensor " + sensorId + " was included more than once.");
     seenSensorIds.add(sensorId);
 
-    if (typeof entry.mode !== "string" || !isSimulationMode(entry.mode)) {
-      throw new SimulationRequestError(`Sensor ${sensorId} has an invalid mode.`);
+    if (typeof entry.active !== "boolean") throw new SimulationRequestError("Sensor " + sensorId + " must include an active boolean.");
+    const mode = entry.mode == null ? undefined : entry.mode;
+    if (mode !== undefined && (typeof mode !== "string" || !isSimulationMode(mode))) {
+      throw new SimulationRequestError("Sensor " + sensorId + " has an invalid mode.");
     }
 
-    if (typeof entry.active !== "boolean") {
-      throw new SimulationRequestError(`Sensor ${sensorId} must include an active boolean.`);
+    const currentRainMmHr = entry.currentRainMmHr == null ? undefined : Number(entry.currentRainMmHr);
+    const rainfallMm = entry.rainfallMm == null ? undefined : Number(entry.rainfallMm);
+    const normalizedRain = currentRainMmHr ?? rainfallMm;
+    if (entry.active && mode === undefined && (normalizedRain == null || !Number.isFinite(normalizedRain) || normalizedRain < 0)) {
+      throw new SimulationRequestError("Sensor " + sensorId + " requires a valid rainfallMm value.");
     }
 
-    return { sensorId, mode: entry.mode, active: entry.active };
+    const probabilityInput = entry.forecastPrecipitationProbability ?? entry.precipitationProbability;
+    const probability = probabilityInput == null ? null : Number(probabilityInput);
+    if (probability != null && (!Number.isFinite(probability) || probability < 0 || probability > 100)) {
+      throw new SimulationRequestError("Sensor " + sensorId + " has an invalid precipitation probability.");
+    }
+
+    return {
+      sensorId,
+      active: entry.active,
+      mode,
+      currentRainMmHr: normalizedRain == null ? undefined : Math.min(normalizedRain, 500),
+      rainfallMm: rainfallMm == null ? undefined : Math.min(rainfallMm, 500),
+      forecastPrecipitationProbability: probability,
+      weatherProvider: typeof entry.weatherProvider === "string" ? entry.weatherProvider.slice(0, 32) : undefined,
+      weatherObservedAt: typeof entry.weatherObservedAt === "string" && !Number.isNaN(Date.parse(entry.weatherObservedAt)) ? entry.weatherObservedAt : undefined,
+    };
   });
 }
 
 function isSimulationMode(value: string): value is SimulationMode {
   return SIMULATION_MODES.some((mode) => mode === value);
 }
+
+function numberValue(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

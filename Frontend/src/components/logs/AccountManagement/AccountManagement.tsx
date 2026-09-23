@@ -131,8 +131,11 @@ export function AccountManagement() {
 
   const departmentOptions = useMemo(() => uniqueSorted(users.map((user) => user.department)), [users]);
   const roleFilterOptions = useMemo(() => {
-    const labels = new Set(roleOptions);
-    users.forEach((user) => labels.add(user.role_label || "Unassigned"));
+    const labels = new Set(roleOptions.filter((role) => role !== "Super Admin"));
+    users.forEach((user) => {
+      const role = user.role_label || "Unassigned";
+      if (role !== "Super Admin") labels.add(role);
+    });
     return Array.from(labels).sort((a, b) => roleSortValue(a) - roleSortValue(b) || a.localeCompare(b));
   }, [users]);
   const barangayOptions = useMemo(() => {

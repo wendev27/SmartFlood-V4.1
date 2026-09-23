@@ -15,6 +15,9 @@ function aiBackendUrl() {
 
 export async function POST(request: NextRequest) {
   try {
+    // This route is the Human-in-the-Loop gate: a signed-in super/CSWDD user
+    // must approve one validated draft before recommendations and emergency
+    // allocation workflow records are persisted.
     const viewer = await getDashboardViewer(request);
     const role = dashboardViewerRole(viewer);
     if (!viewer) {
@@ -54,6 +57,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The accepted plan is copied into the durable emergency workflow only
+    // after the AI service has saved its recommendation-history rows.
     const savedRecommendations = Array.isArray(result?.data) ? result.data.filter(isRecord) : [];
     const workflow = await createAcceptedWorkflowBatch(plan, savedRecommendations, viewer);
     return NextResponse.json({ success: true, ...workflow });

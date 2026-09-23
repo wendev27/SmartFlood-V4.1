@@ -132,7 +132,7 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
   const queryClient = useQueryClient();
   const [currentUser] = useState(() => getCurrentUser());
   const canViewResidentInfo = canViewResidents(currentUser);
-  const isSuperAdmin = Number(currentUser?.role_id) === 1 || residentRoleText(currentUser).includes("super");
+  const isSuperAdmin = Number(currentUser?.role_id) === 1 || Number(currentUser?.role_id) === 2 || residentRoleText(currentUser).includes("super");
   const canManageResidentRecords = !isSuperAdmin && canManageResidents(currentUser);
   const showResidentActions = canManageResidentRecords;
   const isBarangayOfficial = isBarangayUser(currentUser);
@@ -615,8 +615,8 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
               </table>
             </div>
           </div>
+          <SharedPagination pagination={paginatedResidents.pagination} onPageChange={setResidentPage} label="Residents" />
         </article>
-        <SharedPagination pagination={paginatedResidents.pagination} onPageChange={setResidentPage} label="Residents" />
 
         <article className={styles.card}>
           <h3>Family Cluster</h3>
@@ -689,8 +689,8 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
               </table>
             </div>
           </div>
+          <SharedPagination pagination={paginatedFamilies.pagination} onPageChange={setFamilyPage} label="Family clusters" />
         </article>
-        <SharedPagination pagination={paginatedFamilies.pagination} onPageChange={setFamilyPage} label="Family clusters" />
       </div>
       <Modal
         isOpen={canManageResidentRecords && isResidentModalOpen}
@@ -789,15 +789,19 @@ export function ResidentsPanel({ barangayScope }: { barangayScope?: string } = {
 
           {residentForm.is_family_head ? (
             <section className={styles.formSection}>
-              <p className={styles.helperText}>Check the box if this category is not applicable (0). Otherwise, enter the count.</p>
+              <p className={styles.helperText}>
+                {residentModalMode === "edit"
+                  ? "Household vulnerability counts are read-only in Edit Resident."
+                  : "Enter 0 if a category is not applicable. Otherwise, enter the count."}
+              </p>
               <div className={styles.countGrid}>
-                <CountField label="Number of PWD" value={residentForm.pwd_count} onChange={(value) => updateForm("pwd_count", value)} />
-                <CountField label="Number of Elderly" value={residentForm.elderly_count} onChange={(value) => updateForm("elderly_count", value)} />
-                <CountField label="Number of 4P's" value={residentForm.four_ps_count} onChange={(value) => updateForm("four_ps_count", value)} />
-                <CountField label="Number of Lactating" value={residentForm.lactating_count} onChange={(value) => updateForm("lactating_count", value)} />
-                <CountField label="Number of Pregnant" value={residentForm.pregnant_count} onChange={(value) => updateForm("pregnant_count", value)} />
-                <CountField label="Number of Infant" value={residentForm.infant_count} onChange={(value) => updateForm("infant_count", value)} />
-                <CountField label="Number of Toddler" value={residentForm.toddler_count} onChange={(value) => updateForm("toddler_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of PWD" value={residentForm.pwd_count} onChange={(value) => updateForm("pwd_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of Elderly" value={residentForm.elderly_count} onChange={(value) => updateForm("elderly_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of 4P's" value={residentForm.four_ps_count} onChange={(value) => updateForm("four_ps_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of Lactating" value={residentForm.lactating_count} onChange={(value) => updateForm("lactating_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of Pregnant" value={residentForm.pregnant_count} onChange={(value) => updateForm("pregnant_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of Infant" value={residentForm.infant_count} onChange={(value) => updateForm("infant_count", value)} />
+                <CountField disabled={residentModalMode === "edit"} label="Number of Toddler" value={residentForm.toddler_count} onChange={(value) => updateForm("toddler_count", value)} />
               </div>
             </section>
           ) : (
@@ -1133,7 +1137,7 @@ function SubmittedApplicationDetails({
     <section className={sectionClassName}>
       <h3>{variant === "form" ? <span aria-hidden="true" /> : null}Submitted Application Details</h3>
       <p className={styles.submittedApplicationIntro}>
-        Historical application information is read-only. Legacy names, birth dates, and pregnancy weeks remain separate submitted lists and are never paired by array position.
+        Historical application information is read-only. Legacy names, birth dates, and pregnancy weeks remain separate submitted lists and are never paired by array position. Use Household Members below to edit authoritative household records.
       </p>
       {isLoading ? <LoadingState message="Loading submitted application details..." /> : null}
       {!isLoading && error ? <p className={styles.memberErrorText}>{error}</p> : null}
@@ -1545,6 +1549,7 @@ function canViewResidents(user: StoredSessionUser | null) {
 
   return (
     roleId === 1
+    || roleId === 2
     || roleId === 3
     || roleId === 4
     || role.includes("super")
@@ -1573,11 +1578,22 @@ function Detail({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function CountField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function CountField({
+  disabled = false,
+  label,
+  value,
+  onChange,
+}: {
+  disabled?: boolean;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label>
       {label}
       <input
+        disabled={disabled}
         type="number"
         min="0"
         value={value}
