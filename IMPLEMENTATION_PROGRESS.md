@@ -750,7 +750,7 @@ repositories were changed.
 ## Dynamic Pregnancy Weeks
 
 - **Model:** `family_members.pregnancy_weeks` remains the stored baseline.
-  The extended, still-unapplied migration `00002` adds nullable
+  Applied migration `00002` adds nullable
   `pregnancy_baseline_at timestamptz` and enforces that pregnant members have
   both values while non-pregnant members have neither.
 - **Dynamic calculation:** `calculateCurrentPregnancyWeeks()` adds complete
@@ -765,11 +765,13 @@ repositories were changed.
   baseline timestamp, and `current_pregnancy_weeks`. Accounts and RBI display
   code distinguishes baseline from current values. Legacy pregnancy names
   and week arrays remain separate read-only lists and are never paired.
-- **Deployment state:** Migration `00002` was extended but not applied. The
-  structured household-member feature flag remains disabled, so its Accounts
-  and RBI panels remain hidden and issue no incompatible live-schema calls.
-- **Data:** No backfill, production row update, migration application, or
-  controlled synthetic approval was performed. The controlled test remains
-  blocked until the migration is manually applied and the feature is restored.
+- **Deployment state:** The user applied migration `00002`; live read-only
+  verification confirmed the new columns. The structured household-member
+  feature flag is enabled for Accounts and RBI.
+- **Data preparation:** Added 55 deterministic resident-linked
+  `family_members` rows from existing `residents_v3` identities. All family
+  links match, 33 exact DOBs were preserved, and 22 unknown DOBs remain NULL.
+  No legacy arrays or vulnerability statuses were inferred; all imported
+  vulnerability flags remain false and pregnancy baseline fields remain NULL.
 - **Unchanged:** Family `pregnant_count`, AHP, AI, ILP, relief, flood logic,
   DOB/age behavior, authentication, RBAC, and barangay scoping.

@@ -55,6 +55,8 @@ export async function resolveDistributionContext(viewer: DashboardViewer | null,
   const barangay = assignedBarangayForUser(viewer);
   if (!barangay) return { status: "UNAUTHORIZED", reason: "Your account is not assigned to a barangay." };
 
+  // Campaign and beneficiary are deliberately resolved independently: the QR
+  // token selects the campaign, while identifier selects a family/resident.
   const campaignIdentifier = await resolveCampaignBatchId(input);
   if (!campaignIdentifier.batchId) {
     return {
@@ -260,6 +262,8 @@ export function duplicateDistributionError(error: unknown) {
 }
 
 async function resolveBeneficiary(identifier: string): Promise<{ family: FamilyRecord | null; resident: ResidentRecord | null; reason?: string }> {
+  // Prefixes are optional. A bare UUID is tried as a family first and then as
+  // a resident; a resident is valid only when it links to a family.
   const parsed = parseIdentifier(identifier);
   if (!parsed.value) return { family: null, resident: null, reason: "QR identifier is required." };
   if (!isUuid(parsed.value)) return { family: null, resident: null, reason: "QR identifier is not a valid resident or family identifier." };

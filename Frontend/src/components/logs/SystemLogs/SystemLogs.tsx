@@ -7,7 +7,6 @@ import { Pagination, type PaginationState } from "@/components/ui/Pagination/Pag
 import { getCurrentUser, logLabelForRole, normalizeUserRole } from "@/lib/authSession";
 import { cn } from "@/lib/cn";
 import { formatBarangayName, normalizeBarangayForCompare } from "@/lib/formatters";
-import { filterLogsForViewer } from "@/lib/logVisibility";
 import { queryKeys, queryStaleTime } from "@/lib/queryKeys";
 import { getAuditLogs } from "@/services/logsService";
 import type { AuditLog } from "@/types/logs";
@@ -16,8 +15,8 @@ import styles from "./SystemLogs.module.css";
 export function SystemLogs() {
   const pageSize = 5;
   const [query, setQuery] = useState("");
+  const [officeFilter, setOfficeFilter] = useState("");
   const [moduleFilter, setModuleFilter] = useState("");
-  const [actionFilter, setActionFilter] = useState("");
   const [previewLog, setPreviewLog] = useState<AuditLog | null>(null);
   const [page, setPage] = useState(1);
   const user = getCurrentUser();
@@ -33,28 +32,34 @@ export function SystemLogs() {
   const isLoading = logsQuery.isPending;
   const error = logsQuery.error instanceof Error ? logsQuery.error.message : logsQuery.error ? "Unable to load logs." : "";
 
-  const roleScopedLogs = useMemo(() => filterLogsForViewer(logsSource, user), [logsSource, user]);
-  const moduleOptions = useMemo(() => unique(roleScopedLogs.map((log) => log.module ?? "")), [roleScopedLogs]);
-  const actionOptions = useMemo(() => unique(roleScopedLogs.map((log) => log.action)), [roleScopedLogs]);
+  // /api/logs already applies the authenticated viewers RBAC/barangay scope.
+  // Keep the client-side filters on that authorized dataset without re-scoping it
+  // from a separately stored browser session that can be stale or incomplete.
+  const authorizedLogs = logsSource;
+  const officeOptions = useMemo(() => unique(authorizedLogs.map(officeForLog).filter(Boolean)), [authorizedLogs]);
+  const moduleOptions = useMemo(() => unique(authorizedLogs.map((log) => canonicalModule(log.module))), [authorizedLogs]);
 
   const logs = useMemo(() => {
     const normalizedQuery = normalizeBarangayForCompare(query);
-    return roleScopedLogs.filter((log) => {
+    return authorizedLogs.filter((log) => {
+      const office = officeForLog(log);
+      const module = canonicalModule(log.module);
       const searchable = [
         log.actor_name,
         log.actor_role,
         log.action,
-        log.module,
+        module,
+        office,
         log.description,
         log.barangay_name,
         log.created_at,
       ].join(" ");
       const matchesQuery = !normalizedQuery || normalizeBarangayForCompare(searchable).includes(normalizedQuery);
       return matchesQuery
-        && (!moduleFilter || log.module === moduleFilter)
-        && (!actionFilter || log.action === actionFilter);
+        && (!officeFilter || office === officeFilter)
+        && (!moduleFilter || module === moduleFilter);
     });
-  }, [actionFilter, moduleFilter, query, roleScopedLogs]);
+  }, [authorizedLogs, moduleFilter, officeFilter, query]);
 
   const paginatedLogs = useMemo(() => {
     const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
@@ -68,7 +73,7 @@ export function SystemLogs() {
 
   useEffect(() => {
     setPage(1);
-  }, [actionFilter, moduleFilter, query]);
+  }, [moduleFilter, officeFilter, query]);
 
   useEffect(() => {
     if (page !== paginatedLogs.pagination.page) setPage(paginatedLogs.pagination.page);
@@ -83,18 +88,18 @@ export function SystemLogs() {
             <span className={styles.searchIcon} />
             <input
               type="search"
-              placeholder="Search logs by actor, action, module, or barangay..."
+              placeholder="Search logs by actor, office, action, module, or barangay..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
+          <select value={officeFilter} onChange={(event) => setOfficeFilter(event.target.value)} aria-label="Office">
+            <option value="">All Offices</option>
+            {officeOptions.map((office) => <option key={office} value={office}>{office}</option>)}
+          </select>
           <select value={moduleFilter} onChange={(event) => setModuleFilter(event.target.value)} aria-label="Module">
             <option value="">All Modules</option>
             {moduleOptions.map((module) => <option key={module} value={module}>{module}</option>)}
-          </select>
-          <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} aria-label="Action">
-            <option value="">All Actions</option>
-            {actionOptions.map((action) => <option key={action} value={action}>{action}</option>)}
           </select>
         </div>
 
@@ -107,7 +112,7 @@ export function SystemLogs() {
             <tr>
               <th>Event</th>
               <th>Email</th>
-              <th>Department</th>
+              <th>Office</th>
               <th>Action</th>
               <th>Timestamp</th>
               <th>Preview</th>
@@ -120,8 +125,8 @@ export function SystemLogs() {
                   <span className={cn(styles.action, styles[getActionTone(log.action)])}>{log.action}</span>
                 </td>
                 <td>{formatBarangayName(log.actor_name || "-")}</td>
-                <td>{departmentForLog(log)}</td>
-                <td>{formatBarangayName(log.description || log.module || "-")}</td>
+                <td>{officeForLog(log) || "-"}</td>
+                <td>{formatBarangayName(log.description || canonicalModule(log.module))}</td>
                 <td>{formatDateTime(log.created_at ?? "")}</td>
                 <td className={styles.previewCell}>
                   <button className={styles.previewButton} type="button" onClick={() => setPreviewLog(log)}>Preview</button>
@@ -141,8 +146,8 @@ export function SystemLogs() {
           </tbody>
         </table>
       </div>
-      </article>
       <Pagination pagination={paginatedLogs.pagination} onPageChange={setPage} label="Audit logs" />
+      </article>
 
       <Modal isOpen={Boolean(previewLog)} onClose={() => setPreviewLog(null)} labelledBy="log-preview-title" className={styles.logDialog} backdropClassName={styles.logBackdrop} size="md">
         {previewLog ? (
@@ -160,7 +165,7 @@ export function SystemLogs() {
                 <Detail label="Actor" value={previewLog.actor_name || previewLog.user || "-"} />
                 <Detail label="Role" value={previewLog.actor_role || "-"} />
                 <Detail label="Action" value={previewLog.action} />
-                <Detail label="Module" value={previewLog.module || "-"} />
+                <Detail label="Module" value={canonicalModule(previewLog.module)} />
                 <Detail label="Barangay" value={previewLog.barangay_name || "-"} />
                 {previewLog.status ? <Detail label="Status / Result" value={previewLog.status} /> : null}
                 <Detail label="Description" value={previewLog.description || "-"} wide />
@@ -198,7 +203,7 @@ function getMetadata(log: AuditLog): Array<[string, string]> {
     ["Target ID", log.target_id],
     ["Barangay ID", log.barangay_id],
     ["Category", log.category],
-    ["Department", log.department],
+    ["Office", officeForLog(log)],
     ["IP Address", log.ipAddress],
   ].flatMap(([label, value]) => value == null || value === "" ? [] : [[String(label), String(value)]]);
 }
@@ -237,20 +242,46 @@ function getActionTone(action: string) {
   return "badgeNeutral";
 }
 
-function departmentForLog(log: AuditLog) {
-  const explicitDepartment = String(log.department ?? "").trim();
-  if (explicitDepartment && !/^(system|sensor|authentication)$/i.test(explicitDepartment)) {
-    return formatBarangayName(explicitDepartment);
-  }
-  if (log.barangay_name) return formatBarangayName(log.barangay_name);
+const reliefManagementBarangay = 'Relief Management ' + String.fromCharCode(0x2013) + ' Barangay';
 
-  const source = `${log.actor_role ?? ""} ${log.module ?? ""}`;
-  if (/cswdd|city welfare/i.test(source)) return "CSWDD";
-  if (/barangay/i.test(source)) return "Barangay";
-  if (/cdrrmo|ndrrmo|command center|disaster/i.test(source)) return "CDRRMO";
-  return explicitDepartment ? formatBarangayName(explicitDepartment) : "System";
+const canonicalModuleLabels: Record<string, string> = {
+  "flood monitoring": "Flood Monitoring Module",
+  monitoring: "Flood Monitoring Module",
+  "alert level": "Alert Level Management",
+  "alert level management": "Alert Level Management",
+  "flood heatmap": "Flood Heatmap",
+  "flood history": "Flood History",
+  "sensor history": "Flood History",
+  "account management": "Account Management",
+  "ai-optimized relief recommendation": "AI-Optimized Relief Recommendation",
+  "emergency relief management": reliefManagementBarangay,
+  "emergency relief": reliefManagementBarangay,
+  "emergency relief / distribution": "Relief Distribution List",
+  "emergency / distribution": "Relief Distribution List",
+  "emergency relief notification": "Relief Distribution List",
+  "resident relief request endorsement": "Resident Relief Request Review",
+  "resident information": "Resident Information / RBI",
+  "resident account registration management": "Resident Account Registration Management",
+  "emergency reports": "Emergency Report Management",
+  "emergency report": "Emergency Report Management",
+  "emergency report history": "Emergency Report History",
+};
+
+function canonicalModule(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Unassigned";
+  const key = raw.toLowerCase().replace(/\s+/g, " ");
+  return canonicalModuleLabels[key] ?? raw;
 }
 
+function officeForLog(log: AuditLog) {
+  const explicitDepartment = String(log.department ?? "").trim();
+  const source = [explicitDepartment, log.actor_role ?? "", log.module ?? ""].join(" ");
+  if (/cswdd|city welfare/i.test(source)) return "CSWDD";
+  if (log.barangay_name || /barangay/i.test(source)) return "Barangay";
+  if (/cdrrmo|ndrrmo|command center/i.test(source)) return "CDRRMO Command Center";
+  return "";
+}
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
 }

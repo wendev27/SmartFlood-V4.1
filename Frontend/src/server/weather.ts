@@ -65,3 +65,170 @@ export async function getWeather(): Promise<WeatherData> {
     .catch((error) => { failedUntil = Date.now() + 60_000; throw error; }).finally(() => { pending = null; });
   return pending;
 }
+
+
+
+
+export type SensorWeather = {
+  currentRainIntensityMmHr: number;
+  forecastPrecipitationProbability: number | null;
+  forecastPrecipitationMm: number | null;
+  observedAt: string;
+  provider: "tomorrow" | "openweather";
+};
+
+const sensorWeatherTtl = 5 * 60 * 1000;
+const sensorWeatherCache = new Map<string, { until: number; value: SensorWeather }>();
+const sensorWeatherPending = new Map<string, Promise<SensorWeather>>();
+const sensorWeatherFailedUntil = new Map<string, number>();
+
+export async function getSensorWeather(lat: number, lng: number): Promise<SensorWeather> {
+  const key = String(lat.toFixed(3)) + "," + String(lng.toFixed(3));
+  const cachedSensorWeather = sensorWeatherCache.get(key);
+  if (cachedSensorWeather && cachedSensorWeather.until > Date.now()) return cachedSensorWeather.value;
+  if ((sensorWeatherFailedUntil.get(key) ?? 0) > Date.now()) {
+    throw new Error("Weather is temporarily unavailable. Please retry shortly.");
+  }
+
+  const existingRequest = sensorWeatherPending.get(key);
+  if (existingRequest) return existingRequest;
+
+  const request = loadSensorWeather(lat, lng)
+    .then((value) => {
+      sensorWeatherCache.set(key, { value, until: Date.now() + sensorWeatherTtl });
+      sensorWeatherFailedUntil.delete(key);
+      return value;
+    })
+    .catch(() => {
+      sensorWeatherFailedUntil.set(key, Date.now() + 60_000);
+      throw new Error("Weather is temporarily unavailable. Please retry shortly.");
+    })
+    .finally(() => sensorWeatherPending.delete(key));
+
+  sensorWeatherPending.set(key, request);
+  return request;
+}
+
+async function loadSensorWeather(lat: number, lng: number): Promise<SensorWeather> {
+  const tomorrowKey = process.env.TOMORROW_API_KEY;
+  const openWeatherKey = process.env.OPENWEATHER_API_KEY;
+  let tomorrowForecastData: { probability: number | null; amount: number | null } | null = null;
+
+  if (tomorrowKey) {
+    const params = {
+      location: String(lat) + "," + String(lng),
+      units: "metric",
+      apikey: tomorrowKey,
+    };
+    const [realtime, forecast] = await Promise.all([
+      provider("https://api.tomorrow.io/v4/weather/realtime", params),
+      provider("https://api.tomorrow.io/v4/weather/forecast", params),
+    ]);
+    tomorrowForecastData = parseTomorrowSensorForecast(forecast);
+    const current = parseTomorrowSensorWeather(realtime);
+    if (current) {
+      return {
+        ...current,
+        forecastPrecipitationProbability: tomorrowForecastData?.probability ?? null,
+        forecastPrecipitationMm: tomorrowForecastData?.amount ?? null,
+      };
+    }
+  }
+
+  if (openWeatherKey) {
+    const currentParams = {
+      lat: String(lat),
+      lon: String(lng),
+      units: "metric",
+      appid: openWeatherKey,
+    };
+    const [currentResponse, forecastResponse] = await Promise.all([
+      provider("https://api.openweathermap.org/data/2.5/weather", currentParams),
+      provider("https://api.openweathermap.org/data/2.5/forecast", currentParams),
+    ]);
+    const current = parseOpenWeatherSensorWeather(currentResponse);
+    if (current) {
+      const forecast = parseOpenWeatherSensorForecast(forecastResponse);
+      return {
+        ...current,
+        forecastPrecipitationProbability: forecast?.probability ?? tomorrowForecastData?.probability ?? null,
+        forecastPrecipitationMm: forecast?.amount ?? tomorrowForecastData?.amount ?? null,
+      };
+    }
+  }
+
+  throw new Error("Weather providers are unavailable.");
+}
+
+function parseTomorrowSensorWeather(payload: unknown): Omit<SensorWeather, "forecastPrecipitationProbability" | "forecastPrecipitationMm"> | null {
+  const data = object(object(payload).data);
+  const values = object(data.values);
+  const intensity = firstFinite(values.precipitationIntensity, values.rainIntensity, values.precipitationIntensityMmHr);
+  const observedAt = typeof data.time === "string" && !Number.isNaN(Date.parse(data.time))
+    ? new Date(data.time).toISOString()
+    : new Date().toISOString();
+
+  if (data.time == null && intensity == null) return null;
+
+  return {
+    currentRainIntensityMmHr: Math.max(0, intensity ?? 0),
+    observedAt,
+    provider: "tomorrow",
+  };
+}
+
+function parseTomorrowSensorForecast(payload: unknown) {
+  const timelines = object(object(payload).timelines);
+  const hourly = Array.isArray(timelines.hourly) ? timelines.hourly : [];
+  const first = object(hourly[0]);
+  const values = object(first.values);
+  const probability = firstFinite(values.precipitationProbability);
+  const amount = firstFinite(values.precipitationAccumulation, values.rainAccumulation, values.precipitationAmount);
+  if (probability == null && amount == null) return null;
+  return {
+    probability: probability == null ? null : clamp(probability, 0, 100),
+    amount: amount == null ? null : Math.max(0, amount),
+  };
+}
+
+function parseOpenWeatherSensorWeather(payload: unknown): Omit<SensorWeather, "forecastPrecipitationProbability" | "forecastPrecipitationMm"> | null {
+  const row = object(payload);
+  const rain = object(row.rain);
+  const oneHour = firstFinite(rain["1h"]);
+  const threeHours = firstFinite(rain["3h"]);
+  const timestamp = typeof row.dt === "number" && Number.isFinite(row.dt) ? row.dt * 1000 : Date.now();
+
+  if (Object.keys(row).length === 0) return null;
+
+  return {
+    currentRainIntensityMmHr: Math.max(0, oneHour ?? (threeHours == null ? 0 : threeHours / 3)),
+    observedAt: new Date(timestamp).toISOString(),
+    provider: "openweather",
+  };
+}
+
+function parseOpenWeatherSensorForecast(payload: unknown) {
+  const listValue = object(payload).list;
+  const list = Array.isArray(listValue) ? listValue : [];
+  const first = object(list[0]);
+  const rain = object(first.rain);
+  const amount = firstFinite(rain["3h"], rain["1h"]);
+  const probability = firstFinite(first.pop);
+  if (probability == null && amount == null) return null;
+  return {
+    probability: probability == null ? null : clamp(probability <= 1 ? probability * 100 : probability, 0, 100),
+    amount: amount == null ? null : Math.max(0, amount),
+  };
+}
+
+function firstFinite(...values: unknown[]) {
+  for (const value of values) {
+    const number = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}

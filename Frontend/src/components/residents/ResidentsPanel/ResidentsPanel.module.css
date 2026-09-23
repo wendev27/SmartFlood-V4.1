@@ -1179,6 +1179,7 @@
 /* Preserve record actions and full table scrolling at every viewport. */
 .barangayPanel .card,.barangayPanel .card:has(.cardBody nav) { height: auto; min-height: 0; }
 .barangayPanel .cardBody,.barangayPanel .card:has(.cardBody nav) .cardBody { flex-basis: auto; height: auto; overflow: visible; padding-bottom: 24px; }
+.barangayPanel .card > nav { margin: 0 14px 24px; }
 .barangayPanel .wrap { overflow-x: auto; }
 .barangayPanel .table { table-layout: auto; }
 .barangayPanel .toolbar { flex-wrap: wrap; }
@@ -1262,6 +1263,12 @@
 .residentDialog .modalSearchField:focus-within {
   border-color: #0f61ff;
   box-shadow: 0 0 0 3px rgba(15, 97, 255, 0.12);
+}
+
+.residentDialog .countGrid input:disabled {
+  background: #eef2f7;
+  color: #64748b;
+  cursor: not-allowed;
 }
 
 /* The checkbox and label must remain one horizontal control. */

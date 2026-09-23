@@ -583,6 +583,8 @@ function FloodHeatmap({ onBack, userProfile }: MonitoringSubpageProps) {
   );
 }
 
+const SHOW_CURRENT_SENSOR_ALERTS = false;
+
 function AlertLevelManagement({ onBack, userProfile }: MonitoringSubpageProps) {
   const sensorsQuery = useQuery({
     queryKey: queryKeys.sensors.latest,
@@ -633,6 +635,7 @@ function AlertLevelManagement({ onBack, userProfile }: MonitoringSubpageProps) {
         </div>
       </article>
 
+      {SHOW_CURRENT_SENSOR_ALERTS ? (
       <article className={styles.activityPanel}>
         <h3>Current Sensor Alerts</h3>
         <div className={styles.activityList}>
@@ -653,6 +656,7 @@ function AlertLevelManagement({ onBack, userProfile }: MonitoringSubpageProps) {
           ))}
         </div>
       </article>
+      ) : null}
       <p className={styles.alertSource}>
         According to PAGASA: <a href="https://www.pagasa.dost.gov.ph/" target="_blank" rel="noreferrer">https://www.pagasa.dost.gov.ph/</a>
       </p>

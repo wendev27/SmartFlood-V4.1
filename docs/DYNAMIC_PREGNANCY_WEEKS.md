@@ -3,12 +3,11 @@
 ## Status
 
 Implementation is complete in source code. Migration
-`20260917000002_add_family_member_vulnerabilities.sql` was extended but was
-not applied to the active Supabase project. No production data was changed.
+`20260917000002_add_family_member_vulnerabilities.sql` has been applied to the
+active Supabase project.
 
-The structured household-member UI remains behind
-`SHOW_STRUCTURED_HOUSEHOLD_MEMBERS = false` until that migration is manually
-applied and verified.
+The structured household-member UI is enabled through
+`SHOW_STRUCTURED_HOUSEHOLD_MEMBERS = true` after live schema verification.
 
 ## Authoritative model
 
@@ -67,17 +66,16 @@ Legacy `pregnant_full_names[]` and `pregnancy_weeks[]` are displayed as
 separate submitted lists. They are not paired by array position or converted
 to structured member identities.
 
-## Deployment and controlled-test blocker
+## Deployment status
 
-Before restoring the structured UI or running the requested synthetic test:
+The schema and structured UI are restored. The completed data preparation was:
 
-1. Manually apply migration `00002` to the intended Supabase project.
-2. Verify `pregnancy_baseline_at` and the revised integrity constraint.
-3. Run one controlled application submission and approval.
-4. Verify the application baseline, persisted member baseline timestamp,
-   provenance IDs, and response-derived current weeks.
-5. Enable `SHOW_STRUCTURED_HOUSEHOLD_MEMBERS` only after those checks pass.
+1. Migration `00002` was manually applied by the user.
+2. `pregnancy_baseline_at` and the vulnerability columns were verified live.
+3. Existing resident identities were inserted as 55 linked member records:
+   33 with exact DOBs and 22 with NULL DOBs.
+4. No vulnerability or pregnancy state was inferred from legacy arrays.
+5. `SHOW_STRUCTURED_HOUSEHOLD_MEMBERS` was enabled.
 
-No migration, backfill, synthetic record, automatic cleanup, AHP/AI/ILP
-change, family aggregate change, or authentication/RBAC change is included in
-this source implementation.
+No legacy-array conversion, synthetic pregnancy record, AHP/AI/ILP change,
+family aggregate change, or authentication/RBAC change was performed.

@@ -15,6 +15,9 @@ COUNT_FIELDS = (
     "toddler_count",
     "total_family_members",
 )
+# These are configured, already-normalized criterion weights. SmartFlood uses
+# them in an AHP-inspired weighted sum; it does not build a pairwise matrix or
+# calculate eigenvectors at request time.
 AHP_WEIGHTS = {
     "infant": 0.22,
     "elderly": 0.20,
@@ -42,6 +45,9 @@ def generate_recommendations(
     inventory: dict[str, int],
     barangays: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    # Generation produces all three ILP strategies, while this compatibility
+    # response uses Balanced for its top-level rows and embeds every plan for
+    # explicit human selection in the dashboard.
     plans = generate_recommendation_plans(sensors, latest_readings, families, inventory, barangays)
     balanced = next(plan for plan in plans if plan["plan_id"] == "balanced")
     rows = apply_plan_allocations(_base_recommendation_rows(sensors, latest_readings, families, barangays), balanced)
@@ -174,6 +180,8 @@ def _group_families(families: list[dict[str, Any]], aliases: dict[str, dict[str,
 def _score_barangay(
     barangay: dict[str, str], sensor_groups: dict[str, dict[str, Any]], family_groups: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
+    # Sensor severity and stored family aggregates meet here. The resulting
+    # score is a deterministic priority coefficient, not a learned prediction.
     key = barangay["barangay_id"]
     sensor = sensor_groups.get(key)
     totals = family_groups.get(key, {field: 0 for field in COUNT_FIELDS} | {"affected_families": 0})
@@ -301,6 +309,8 @@ def _risk_label(risk_level: str) -> str:
 
 
 def _ahp_breakdown(totals: dict[str, Any]) -> dict[str, Any]:
+    # Weighted-sum model: each demographic count is multiplied by its fixed
+    # criterion weight, then all contributions are added.
     counts = {name: _number(totals.get(field)) for name, field in AHP_COUNT_FIELDS.items()}
     contributions = {name: round(counts[name] * weight, 4) for name, weight in AHP_WEIGHTS.items()}
     return {
@@ -312,6 +322,10 @@ def _ahp_breakdown(totals: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fuzzy_explanation(water_level: int | float) -> dict[str, Any]:
+    # Membership functions expose how strongly one reading belongs to each
+    # flood label. The operational label itself is selected by the crisp
+    # thresholds in _risk_from_water_level; there is no rule base or
+    # defuzzification stage in the current implementation.
     memberships = {
         "normal": _descending_membership(water_level, 0.25, 0.50),
         "flood_alert": _trapezoid_membership(water_level, 0.25, 0.25, 0.50, 0.75),

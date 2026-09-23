@@ -20,6 +20,10 @@ function getEncryptionKey() {
 export function encryptCampaignQrToken(token: string) {
   if (!token) throw new Error("Campaign QR token is required.");
 
+  // AES-GCM protects the database copy used for later QR re-display and also
+  // detects tampering through its authentication tag. The QR renderer still
+  // receives the decrypted opaque token; the QR payload itself is not this
+  // versioned ciphertext envelope.
   const iv = randomBytes(ivLength);
   const cipher = createCipheriv(algorithm, getEncryptionKey(), iv);
   const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
@@ -35,6 +39,7 @@ export function encryptCampaignQrToken(token: string) {
 
 export function decryptCampaignQrToken(encryptedToken: string) {
   try {
+    // Reject malformed envelopes before attempting authenticated decryption.
     const [version, encodedIv, encodedAuthTag, encodedCiphertext] = encryptedToken.split(".");
     if (version !== payloadVersion || !encodedIv || !encodedAuthTag || !encodedCiphertext) throw new Error();
 

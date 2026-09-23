@@ -82,6 +82,8 @@ type CalendarDate = {
  * date. Returns null for malformed/future birth dates.
  */
 export function calculateCurrentAge(birthDate: string | Date, asOf = new Date()): number | null {
+  // Convert the instant to one Manila calendar date before comparing month/day;
+  // this keeps the birthday boundary independent of server UTC/local settings.
   const birth = parseBirthDate(birthDate);
   const today = calendarDateInTimeZone(asOf, RESIDENT_DATE_TIME_ZONE);
 
@@ -110,6 +112,8 @@ export function calculateCurrentPregnancyWeeks(
   const today = calendarDateInTimeZone(currentDate, RESIDENT_DATE_TIME_ZONE);
   if (!baselineDate || !today || compareCalendarDates(baselineDate, today) > 0) return null;
 
+  // Calendar-day arithmetic avoids daylight-saving/hour-length effects and
+  // advances only after each complete seven-day interval.
   const elapsedDays = calendarDayNumber(today) - calendarDayNumber(baselineDate);
   return Number(baselineWeeks) + Math.floor(elapsedDays / 7);
 }
@@ -189,6 +193,8 @@ function classifyApprovedLifeStage(
   if (age === 0) return { classification: "infant", age, reason: "classified" };
 
   if (age === 1) {
+    // Whole-year age alone cannot distinguish the exact 12-month anniversary
+    // from the following day, so DOB context enforces the approved boundary.
     const birth = context.birthDate == null ? null : parseBirthDate(context.birthDate);
     const today = calendarDateInTimeZone(context.asOf ?? new Date(), RESIDENT_DATE_TIME_ZONE);
     if (!birth || !today) {

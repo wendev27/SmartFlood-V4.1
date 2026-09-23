@@ -35,6 +35,8 @@ export async function getEncryptedCampaignQrToken(batchId: string) {
 }
 
 export async function resolveCampaignBatchIdByQrToken(qrToken: string) {
+  // Compare hashes instead of querying by the encrypted re-display value.
+  // A successful match identifies a campaign batch, not a beneficiary.
   const qrTokenHash = createHash("sha256").update(qrToken, "utf8").digest("hex");
   const { data, error } = await supabaseServer
     .from("emergency_allocation_batches")

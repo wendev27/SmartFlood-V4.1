@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const identifier = String(body.qr_identifier ?? body.identifier ?? body.resident_id ?? body.family_id ?? "").trim();
+    // Confirmation repeats the complete authorization, campaign, beneficiary,
+    // barangay, readiness, and duplicate checks performed during preview.
     const context = await resolveDistributionContext(viewer, {
       identifier,
       allocation_item_id: stringifyOrNull(body.allocation_item_id),
@@ -57,6 +59,7 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       if (duplicateDistributionError(error)) {
+        // The database unique key is the final race-safe duplicate barrier.
         const duplicateContext = await resolveDistributionContext(viewer, {
           identifier,
           allocation_item_id: allocation.item_id,

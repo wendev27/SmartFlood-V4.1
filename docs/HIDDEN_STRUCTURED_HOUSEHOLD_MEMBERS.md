@@ -1,21 +1,21 @@
-# Temporarily Hidden Structured Household Members
+# Structured Household Members — Restoration Record
 
 ## Status
 
-The structured household-member UI is temporarily hidden because the active
-Supabase database has not yet applied:
+The structured household-member UI has been restored after the active
+Supabase database applied:
 
 `supabase/migrations/20260917000002_add_family_member_vulnerabilities.sql`
 
-Without that migration, the family-member API returns errors such as:
+Before that migration, the family-member API returned errors such as:
 
 `column family_members.is_pwd does not exist`
 
-## Hidden UI
+## Restored UI
 
 The shared frontend flag
-`Frontend/src/lib/featureFlags.ts` currently hides structured household-member
-features from these modals:
+`Frontend/src/lib/featureFlags.ts` now enables structured household-member
+features in these modals:
 
 - RBI Add Resident: structured household-member editor;
 - RBI Edit Resident: structured household-member editor, Add Member, Remove,
@@ -25,10 +25,10 @@ features from these modals:
   member-coverage notice;
 - Resident Account Registration Review: structured `household_members` panel.
 
-The disabled panels do not issue `family_members` or family-member coverage
-requests. This prevents the unapplied-column error from appearing.
+These panels now issue the existing authorized `family_members` and coverage
+requests.
 
-## Still Visible
+## Preserved Behavior
 
 - RBI resident and family details;
 - existing stored family vulnerability aggregate counts;
@@ -42,13 +42,16 @@ paired by position.
 
 ## Data and Backend Impact
 
-- No database migration was applied.
-- No database records were changed.
-- No household-member rows were created, updated, or deleted.
+- Migration `00002` was applied by the user.
+- 55 existing `residents_v3` identities were safely represented as linked
+  `family_members` rows.
+- 33 exact resident DOBs were preserved and 22 unknown DOBs remained NULL.
+- No vulnerability status was inferred; all imported PWD, pregnant, lactating,
+  and 4Ps flags remain false, with pregnancy baseline fields NULL.
 - Family-member backend routes and persistence code remain available.
 - Authentication, RBAC, barangay scoping, AHP, AI, and ILP are unchanged.
 
-## Restore Checklist
+## Completed Restore Checklist
 
 1. Review and manually apply
    `20260917000002_add_family_member_vulnerabilities.sql` to the active
@@ -57,10 +60,10 @@ paired by position.
    `pregnancy_baseline_at`, and `resident_applications.household_members`
    exist.
 3. Verify the family-member GET/POST/PATCH/DELETE routes in a controlled test.
-4. Change `SHOW_STRUCTURED_HOUSEHOLD_MEMBERS` to `true`.
+4. Change `SHOW_STRUCTURED_HOUSEHOLD_MEMBERS` to `true`. **Completed.**
 5. Run frontend/backend typechecks, builds, focused family-member tests, and
    `git diff --check` before deployment.
 
-The hidden structured panels already support dynamic pregnancy-week display.
-They must not be restored until the baseline timestamp column and pregnancy
-integrity constraint from migration `00002` are present in the active schema.
+Historical Submitted Application Details remain read-only. Administrators use
+the restored Household Members editor for authoritative member updates; legacy
+parallel arrays are not rewritten or positionally paired.

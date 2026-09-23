@@ -47,6 +47,9 @@ async def create_recommendations(
 ) -> ApiResponse:
     if inventory.total <= 0:
         raise HTTPException(status_code=400, detail="Please input available relief inventory before generating recommendations.")
+    # Generation is read-only with respect to recommendation history: current
+    # sensor, family, barangay, and operator-entered inventory data are scored
+    # and optimized into draft plans for human review.
     sensors, readings = await run_in_threadpool(repository.get_sensor_snapshot)
     families = await run_in_threadpool(repository.get_families)
     barangays = await run_in_threadpool(repository.get_barangays)
@@ -83,6 +86,8 @@ async def approve_recommendations(request: Request, repository: SmartFloodReposi
     if len(rows) != len(allocations):
         raise HTTPException(status_code=400, detail="Selected allocation plan contains invalid allocation rows.")
 
+    # Only the separately approved plan reaches persistence. Authentication and
+    # role enforcement happen in the dashboard API before this service call.
     actor = _audit_actor_from_payload(body.get("audit_actor"))
     try:
         saved_rows = await run_in_threadpool(repository.save_recommendations, recommendation_rows_to_save(rows))
