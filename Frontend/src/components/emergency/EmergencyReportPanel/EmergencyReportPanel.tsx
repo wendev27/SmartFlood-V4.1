@@ -84,7 +84,7 @@ export function EmergencyReportPresentation({
       <h1>{isHistory ? "Emergency Report History" : "Emergency Report"}</h1>
       {!isHistory ? <div className={styles.statusTabs} role="tablist" aria-label="Emergency report status">
         {(["Pending", "En Route", "Arrived"] as const).map((status) => <button
-          key={status} type="button" role="tab" aria-selected={statusFilter === status}
+          key={status} className={styles[statusClass(status)]} type="button" role="tab" aria-selected={statusFilter === status}
           disabled={!canRead} onClick={() => onStatusFilterChange(status)}
         >
           <span className={styles.statusTabIcon} aria-hidden="true">{status === "Pending" ? "◷" : status === "En Route" ? "→" : "✓"}</span>
